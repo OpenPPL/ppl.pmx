@@ -59,8 +59,8 @@ For [Grouped-Query Attention](https://arxiv.org/pdf/2305.13245.pdf). Repeat key 
 Define data layout of `cache` and `scale`. Default is zero.
 
 Meaning of numbers:
-- `0`: $cache(MaxB,L,2,MaxS,H,Dh)$ and $scale(MaxB,L,2,MaxS,H,Dh/quant\_group)$
-- `1`: $cache(L,MaxB,2,H,MaxS,Dh)$ and $scale(L,MaxB,2,H,MaxS,Dh/quant\_group)$
+- `0`: $cache(MaxB,L,2,MaxS,H,Dh)$ and $scale(MaxB,L,2,MaxS,H,Dh/quant\\_group)$
+- `1`: $cache(L,MaxB,2,H,MaxS,Dh)$ and $scale(L,MaxB,2,H,MaxS,Dh/quant\\_group)$
 
 ## Inputs
 
@@ -92,13 +92,13 @@ Contains key and value cache quantize scales of attention layer. When `cache_lay
 
 ### `key`: tensor(T1)
 
-Shape: $(B,start\_pos+S,H*num\_repeat,Dh)$
+Shape: $(B,start\\_pos+S,H*num\\_repeat,Dh)$
 
 Key contains current key and all pass key. If `quant_bit` is not `0`, it should be decompressed.
 
 ### `value`: tensor(T1)
 
-Shape: $(B,start\_pos+S,H*num\_repeat,Dh)$
+Shape: $(B,start\\_pos+S,H*num\\_repeat,Dh)$
 
 Value contains current value and all pass value. If `quant_bit` is not `0`, it should be decompressed.
 
