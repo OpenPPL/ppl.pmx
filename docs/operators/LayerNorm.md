@@ -9,7 +9,7 @@ $\gamma$ and $\beta$ are learnable affine transform parameters with shape as las
 
 SkipLayerNorm is performed by the formula below:
 
-$$z=skip\_out=x+skip\_in$$
+$$z=skip\\_out=x+skip\\_in$$
 
 $$y=\frac{z-E[z]}{\sqrt{Var[z]+\epsilon}}*\gamma+\beta$$
 
