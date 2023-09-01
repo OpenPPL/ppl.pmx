@@ -12,15 +12,15 @@ Multi-Head Attention(${\rm MHA}$) is defined as:
 
 $${\rm MHA}(Q,K,V)=[head_1, head_2,...,head_h]$$
 
-$$head_i={\rm softmax}(\frac{Q_iK_i^T}{\sqrt{head\_dim}})V_i$$
+$$head_i={\rm softmax}(\frac{Q_iK_i^T}{\sqrt{head\\_dim}})V_i$$
 
 $Q$ is `query`, $K$ is `key` and $V$ is `value`.
 
-Shape of $Q$ is $(batch, num\_heads, seqlen\_q, head\_dim)$ and shape of $K$ and $V$ are $(batch, num\_kv\_heads, seqlen\_kv, head\_dim)$.
+Shape of $Q$ is $(batch, num\\_heads, seqlen\\_q, head\\_dim)$ and shape of $K$ and $V$ are $(batch, num\\_kv\\_heads, seqlen\\_kv, head\\_dim)$.
 
 In MultiHeadCacheAttention, `key = cat(past_key, current_key)` and `value = cat(past_value, current_value)`
 
-But in this operator, shape of $Q$ will be $(batch, seqlen\_q, num\_heads, head\_dim)$ and shape of $K$ and $V$ will be $(batch, seqlen\_kv, num\_kv\_heads, head\_dim)$. So we need to do some transpose before applying attention.
+But in this operator, shape of $Q$ will be $(batch, seqlen\\_q, num\\_heads, head\\_dim)$ and shape of $K$ and $V$ will be $(batch, seqlen\\_kv, num\\_kv\\_heads, head\\_dim)$. So we need to do some transpose before applying attention.
 
 ## Attributes/Parameters
 
@@ -30,7 +30,7 @@ Number of heads
 
 ### `head_dim`: int
 
-Dimension of each head, where $head\_dim * num\_heads = hidden\_dim$
+Dimension of each head, where $head\\_dim * num\\_heads = hidden\\_dim$
 
 ### `is_causal`: bool
 
@@ -61,8 +61,8 @@ Quantize scale shared group size. $2^n$ and $n > 2$ is recommanded for hardware 
 Define data layout of `cache` and `scale`. Default is zero.
 
 Meaning of numbers:
-- `0`: $cache(MaxB,L,2,MaxS,H,Dh)$ and $scale(MaxB,L,2,MaxS,H,Dh/quant\_group)$
-- `1`: $cache(L,MaxB,2,H,MaxS,Dh)$ and $scale(L,MaxB,2,H,MaxS,Dh/quant\_group)$
+- `0`: $cache(MaxB,L,2,MaxS,H,Dh)$ and $scale(MaxB,L,2,MaxS,H,Dh/quant\\_group)$
+- `1`: $cache(L,MaxB,2,H,MaxS,Dh)$ and $scale(L,MaxB,2,H,MaxS,Dh/quant\\_group)$
 
 ## Inputs
 
@@ -70,18 +70,18 @@ Meaning of numbers:
 
 Input Query tensor
 
-Shape: $(batch, seqlen\_q, num\_heads, head\_dim)$
+Shape: $(batch, seqlen\\_q, num\\_heads, head\\_dim)$
 ### `current_key`: tensor(T1)
 
 Input Key tensor
 
-Shape: $(batch, seqlen\_q, num\_kv\_heads, head\_dim)$
+Shape: $(batch, seqlen\\_q, num\\_kv\\_heads, head\\_dim)$
 
 ### `currnet_value`: tensor(T1)
 
 Input Value tensor
 
-Shape: $(batch, seqlen\_q, num\_kv\_heads, head\_dim)$
+Shape: $(batch, seqlen\\_q, num\\_kv\\_heads, head\\_dim)$
 
 ### `start_pos`: scalar(int64)
 
@@ -101,9 +101,9 @@ Contains key and value cache quantize scales of attention layer. When `cache_lay
 
 ### `attn_mask`(optional): tensor(T1)
 
-Optional custom mask. If shape is $(seqlen\_q, seqlen\_kv)$, `attn_mask` will be broadcasted.
+Optional custom mask. If shape is $(seqlen\\_q, seqlen\\_kv)$, `attn_mask` will be broadcasted.
 
-Shape: $(seqlen\_q, seqlen\_kv)$ or $(batch, num\_heads, seqlen\_q, seqlen\_kv)$
+Shape: $(seqlen\\_q, seqlen\\_kv)$ or $(batch, num\\_heads, seqlen\\_q, seqlen\\_kv)$
 
 ## Outputs
 
@@ -111,7 +111,7 @@ Shape: $(seqlen\_q, seqlen\_kv)$ or $(batch, num\_heads, seqlen\_q, seqlen\_kv)$
 
 Output feature of attention result
 
-Shape: $(batch, seqlen\_q, num\_heads, head\_dim)$
+Shape: $(batch, seqlen\\_q, num\\_heads, head\\_dim)$
 
 ## Type Constraints
 
