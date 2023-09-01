@@ -52,7 +52,7 @@ Shape: $(N)$ or $(N_d)$ for each device $d$ when `gather_output` is `False`.
 
 Output feature of linear transformation.
 
-Shape: $(*,N)$ or $(*, N_d)$ for each device $d$ when `gather_output` is `False`, where $∗$ means any number of dimensions including none.
+Shape: $(\*,N)$ or $(\*, N_d)$ for each device $d$ when `gather_output` is `False`, where $∗$ means any number of dimensions including none.
 
 ## Type Constraints
 
