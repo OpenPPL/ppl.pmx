@@ -43,10 +43,10 @@ Define cache indexing mode. Default is zero.
 Define data layout of `cache` and `scale`. Default is zero.
 
 Meaning of numbers:
-- `0`: $cache(MaxT,L,2,H,Dh)$ and $scale(MaxT,L,2,H,Dh/quant\_group)$
-- `1`: $cache(L,MaxT,2,H,Dh)$ and $scale(L,MaxT,2,H,Dh/quant\_group)$
-- `2`: $cache(L,H,MaxT,2,Dh)$ and $scale(L,H,MaxT,2,Dh/quant\_group)$
-- `3`: $cache(2,L,H,MaxT,Dh)$ and $scale(2,L,H,MaxT,Dh/quant\_group)$
+- `0`: $cache(MaxT,L,2,H,Dh)$ and $scale(MaxT,L,2,H,Dh/quant\\_group)$
+- `1`: $cache(L,MaxT,2,H,Dh)$ and $scale(L,MaxT,2,H,Dh/quant\\_group)$
+- `2`: $cache(L,H,MaxT,2,Dh)$ and $scale(L,H,MaxT,2,Dh/quant\\_group)$
+- `3`: $cache(2,L,H,MaxT,Dh)$ and $scale(2,L,H,MaxT,Dh/quant\\_group)$
 
 ## Inputs
 
@@ -112,13 +112,13 @@ Contains key and value cache quantize scales of attention layer. When `cache_lay
 
 ### `key`: tensor(T1)
 
-Shape: $(kvstarts[B],H*num\_repeat,Dh)$
+Shape: $(kvstarts[B],H*num\\_repeat,Dh)$
 
 Packed current key and all pass key. If `quant_bit` is not `0`, it should be decompressed.
 
 ### `value`: tensor(T1)
 
-Shape: $(kvstarts[B],H*num\_repeat,Dh)$
+Shape: $(kvstarts[B],H*num\\_repeat,Dh)$
 
 Packed contains current value and all pass value. If `quant_bit` is not `0`, it should be decompressed.
 
