@@ -15,7 +15,7 @@ Number of heads
 
 ### `head_dim`: int
 
-Dimension of each head, where $head\_dim * num\_heads = hidden\_dim$
+Dimension of each head, where $head\\_dim * num\\_heads = hidden\\_dim$
 
 ### `is_causal`: bool
 
@@ -31,18 +31,18 @@ For [Grouped-Query Attention](https://arxiv.org/pdf/2305.13245.pdf). If `num_kv_
 
 Input Query tensor
 
-Shape: $(seqstarts[B], num\_heads, head\_dim)$
+Shape: $(seqstarts[B], num\\_heads, head\\_dim)$
 ### `key`: tensor(T)
 
 Input Key tensor
 
-Shape: $(kvstarts[B], num\_kv\_heads, head\_dim)$
+Shape: $(kvstarts[B], num\\_kv\\_heads, head\\_dim)$
 
 ### `value`: tensor(T)
 
 Input Value tensor
 
-Shape: $(kvstarts[B], num\_kv\_heads, head\_dim)$
+Shape: $(kvstarts[B], num\\_kv\\_heads, head\\_dim)$
 
 ### `seqstarts`: tensor(int64)
 
@@ -78,7 +78,7 @@ Optional custom mask.
 `seqlens=seqstarts[1:]-seqstarts[:B]` is a sequence contains length of `query` for each batch.
 `kvlens=kvstarts[1:]-kvstarts[:B]` is a sequence contains length of `key` and `value` for each batch.
 
-Shape: $(num\_heads, {\rm sum}(seqlens), {\rm sum}(kvlens))$ or $({\rm sum}(seqlens), {\rm sum}(kvlens))$
+Shape: $(num\\_heads, {\rm sum}(seqlens), {\rm sum}(kvlens))$ or $({\rm sum}(seqlens), {\rm sum}(kvlens))$
 
 ## Outputs
 
@@ -86,7 +86,7 @@ Shape: $(num\_heads, {\rm sum}(seqlens), {\rm sum}(kvlens))$ or $({\rm sum}(seql
 
 Output feature of attention result
 
-Shape: $(seqstarts[B], num\_heads, head\_dim)$
+Shape: $(seqstarts[B], num\\_heads, head\\_dim)$
 
 ## Type Constraints
 

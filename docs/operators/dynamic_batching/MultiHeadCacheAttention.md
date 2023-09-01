@@ -14,7 +14,7 @@ Number of heads
 
 ### `head_dim`: int
 
-Dimension of each head, where $head\_dim * num\_heads = hidden\_dim$
+Dimension of each head, where $head\\_dim * num\\_heads = hidden\\_dim$
 
 ### `is_causal`: bool
 
@@ -51,10 +51,10 @@ Define cache indexing mode. Default is zero.
 Define data layout of `cache` and `scale`. Default is zero.
 
 Meaning of numbers:
-- `0`: $cache(MaxT,L,2,H,Dh)$ and $scale(MaxT,L,2,H,Dh/quant\_group)$
-- `1`: $cache(L,MaxT,2,H,Dh)$ and $scale(L,MaxT,2,H,Dh/quant\_group)$
-- `2`: $cache(L,H,MaxT,2,Dh)$ and $scale(L,H,MaxT,2,Dh/quant\_group)$
-- `3`: $cache(2,L,H,MaxT,Dh)$ and $scale(2,L,H,MaxT,Dh/quant\_group)$
+- `0`: $cache(MaxT,L,2,H,Dh)$ and $scale(MaxT,L,2,H,Dh/quant\\_group)$
+- `1`: $cache(L,MaxT,2,H,Dh)$ and $scale(L,MaxT,2,H,Dh/quant\\_group)$
+- `2`: $cache(L,H,MaxT,2,Dh)$ and $scale(L,H,MaxT,2,Dh/quant\\_group)$
+- `3`: $cache(2,L,H,MaxT,Dh)$ and $scale(2,L,H,MaxT,Dh/quant\\_group)$
 
 ## Inputs
 
@@ -62,19 +62,19 @@ Meaning of numbers:
 
 Input Query tensor
 
-Shape: $(seqstarts[B], num\_heads, head\_dim)$
+Shape: $(seqstarts[B], num\\_heads, head\\_dim)$
 
 ### `current_key`: tensor(T1)
 
 Input Key tensor
 
-Shape: $(seqstarts[B], num\_kv\_heads, head\_dim)$
+Shape: $(seqstarts[B], num\\_kv\\_heads, head\\_dim)$
 
 ### `current_value`: tensor(T1)
 
 Input Value tensor
 
-Shape: $(seqstarts[B], num\_kv\_heads, head\_dim)$
+Shape: $(seqstarts[B], num\\_kv\\_heads, head\\_dim)$
 
 ### `seqstarts`: tensor(int64)
 
@@ -134,7 +134,7 @@ Optional custom mask.
 `seqlens=seqstarts[1:]-seqstarts[:B]` is a sequence contains length of `query` for each batch.
 `kvlens=kvstarts[1:]-kvstarts[:B]` is a sequence contains length of `key` and `value` for each batch.
 
-Shape: $(num\_heads, {\rm sum}(seqlens), {\rm sum}(kvlens))$ or $({\rm sum}(seqlens), {\rm sum}(kvlens))$
+Shape: $(num\\_heads, {\rm sum}(seqlens), {\rm sum}(kvlens))$ or $({\rm sum}(seqlens), {\rm sum}(kvlens))$
 
 ## Outputs
 
@@ -142,7 +142,7 @@ Shape: $(num\_heads, {\rm sum}(seqlens), {\rm sum}(kvlens))$ or $({\rm sum}(seql
 
 Output feature of attention result
 
-Shape: $(seqstarts[B], num\_heads, head\_dim)$
+Shape: $(seqstarts[B], num\\_heads, head\\_dim)$
 
 ## Type Constraints
 

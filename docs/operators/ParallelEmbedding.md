@@ -8,7 +8,7 @@ $$output=gather(input, W)$$
 
 If `paddding_idx` is non negative:
 
-$$output[where(output==padding\_idx)] = 0$$
+$$output[where(output==padding\\_idx)] = 0$$
 
 $N$ is `num_embeddings`, $E$ is `embedding_dim`, and $W$ is embedding weight.
 

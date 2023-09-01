@@ -6,13 +6,13 @@ Multi-Head Attention(${\rm MHA}$) is defined as:
 
 $${\rm MHA}(Q,K,V)=[head_1, head_2,...,head_h]$$
 
-$$head_i={\rm softmax}(\frac{Q_iK_i^T}{\sqrt{head\_dim}})V_i$$
+$$head_i={\rm softmax}(\frac{Q_iK_i^T}{\sqrt{head\\_dim}})V_i$$
 
 $Q$ is `query`, $K$ is `key` and $V$ is `value`.
 
-Shape of $Q$ is $(batch, num\_heads, seqlen\_q, head\_dim)$ and shape of $K$ and $V$ are $(batch, num\_kv\_heads, seqlen\_kv, head\_dim)$.
+Shape of $Q$ is $(batch, num\\_heads, seqlen\\_q, head\\_dim)$ and shape of $K$ and $V$ are $(batch, num\\_kv\\_heads, seqlen\\_kv, head\\_dim)$.
 
-But in this operator, shape of $Q$ will be $(batch, seqlen\_q, num\_heads, head\_dim)$ and shape of $K$ and $V$ will be $(batch, seqlen\_kv, num\_kv\_heads, head\_dim)$. So we need to do some transpose before applying attention.
+But in this operator, shape of $Q$ will be $(batch, seqlen\\_q, num\\_heads, head\\_dim)$ and shape of $K$ and $V$ will be $(batch, seqlen\\_kv, num\\_kv\\_heads, head\\_dim)$. So we need to do some transpose before applying attention.
 
 ## Attributes/Parameters
 
@@ -22,7 +22,7 @@ Number of heads
 
 ### `head_dim`: int
 
-Dimension of each head, where $head\_dim * num\_heads = hidden\_dim$
+Dimension of each head, where $head\\_dim * num\\_heads = hidden\\_dim$
 
 ### `is_causal`: bool
 
@@ -38,24 +38,24 @@ For [Grouped-Query Attention](https://arxiv.org/pdf/2305.13245.pdf). If `num_kv_
 
 Input Query tensor
 
-Shape: $(batch, seqlen\_q, num\_heads, head\_dim)$
+Shape: $(batch, seqlen\\_q, num\\_heads, head\\_dim)$
 ### `key`: tensor(T)
 
 Input Key tensor
 
-Shape: $(batch, seqlen\_kv, num\_kv\_heads, head\_dim)$
+Shape: $(batch, seqlen\\_kv, num\\_kv\\_heads, head\\_dim)$
 
 ### `value`: tensor(T)
 
 Input Value tensor
 
-Shape: $(batch, seqlen\_kv, num\_kv\_heads, head\_dim)$
+Shape: $(batch, seqlen\\_kv, num\\_kv\\_heads, head\\_dim)$
 
 ### `attn_mask`(optional): tensor(T)
 
-Optional custom mask. If shape is $(seqlen\_q, seqlen\_kv)$, `attn_mask` will be broadcasted.
+Optional custom mask. If shape is $(seqlen\\_q, seqlen\\_kv)$, `attn_mask` will be broadcasted.
 
-Shape: $(seqlen\_q, seqlen\_kv)$ or $(batch, num\_heads, seqlen\_q, seqlen\_kv)$
+Shape: $(seqlen\\_q, seqlen\\_kv)$ or $(batch, num\\_heads, seqlen\\_q, seqlen\\_kv)$
 
 ## Outputs
 
@@ -63,7 +63,7 @@ Shape: $(seqlen\_q, seqlen\_kv)$ or $(batch, num\_heads, seqlen\_q, seqlen\_kv)$
 
 Output feature of attention result
 
-Shape: $(batch, seqlen\_q, num\_heads, head\_dim)$
+Shape: $(batch, seqlen\\_q, num\\_heads, head\\_dim)$
 
 ## Type Constraints
 

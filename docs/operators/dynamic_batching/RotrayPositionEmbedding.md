@@ -8,7 +8,7 @@ For `dynamic_batching.RotaryPositionEmbedding`, start postion and sequence lengt
 
 ### `rotary_dim`: int(default: 0)
 
-How many elements in dimension $head\_dim$ to be rotary, must be even number. Default is `0`, which means all elements should be rotary. Otherwise only rotary $Q_r = Q(:\frac{rotary\_dim}{2})$.
+How many elements in dimension $head\\_dim$ to be rotary, must be even number. Default is `0`, which means all elements should be rotary. Otherwise only rotary $Q_r = Q(:\frac{rotary\\_dim}{2})$.
 
 ### `theta`: int(default: 10000)
 
@@ -24,13 +24,13 @@ Bypass rotating `key` for compatibility.
 
 Input query tensor.
 
-Shape: $(seqstarts[batch], num\_heads, head\_dim)$
+Shape: $(seqstarts[batch], num\\_heads, head\\_dim)$
 
 ### `key`: tensor(T)
 
 Input key tensor.
 
-Shape: $(seqstarts[batch], num\_k\_heads, head\_dim)$
+Shape: $(seqstarts[batch], num\\_k\\_heads, head\\_dim)$
 
 ### `seqstarts`: tensor(int64)
 
@@ -56,12 +56,12 @@ Maximum sequence length of `query` and `key`, equal to `max(seqstarts[1:]-seqsta
 
 Query tensor after rotary position embedding.
 
-Shape: $(seqstarts[batch], num\_heads, head\_dim)$
+Shape: $(seqstarts[batch], num\\_heads, head\\_dim)$
 
 ### `rotated_key`: tensor(T)
 
 Key tensor after rotary position embedding .
 
-Shape: $(seqstarts[batch], num\_k\_heads, head\_dim)$
+Shape: $(seqstarts[batch], num\\_k\\_heads, head\\_dim)$
 
 ### `T`: float32, float16, int8

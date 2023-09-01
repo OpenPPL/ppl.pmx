@@ -36,7 +36,7 @@ If false, input should split into $TPsize$ pieces: $(*,K) \rightarrow (*,[K^0,K^
 
 Input feature of linear transformation.
 
-Shape: $(*,K)$ or $(*, K_d)$ for each device $d$ when `input_is_parallel` is `True`, where $∗$ means any number of dimensions including none.
+Shape: $(\*,K)$ or $(\*, K_d)$ for each device $d$ when `input_is_parallel` is `True`, where $∗$ means any number of dimensions including none.
 
 ### `W`(constant): tensor(T1)
 
