@@ -44,13 +44,13 @@ Bypass rotating `key` for compatibility.
 
 Input query tensor.
 
-Shape: $(batch, seq\_len, num\_heads, head\_dim)$
+Shape: $(batch, seq\\_len, num\\_heads, head\\_dim)$
 
 ### `key`: tensor(T)
 
 Input key tensor.
 
-Shape: $(batch, seq\_len, num\_k\_heads, head\_dim)$
+Shape: $(batch, seq\\_len, num\\_k\\_heads, head\\_dim)$
 
 ### `start_pos`: scalar(int64)
 
@@ -68,12 +68,12 @@ Shape: $(batch)$
 
 Query tensor after rotary position embedding.
 
-Shape: $(batch, seq\_len, num\_heads, head\_dim)$
+Shape: $(batch, seq\\_len, num\\_heads, head\\_dim)$
 
 ### `rotated_key`: tensor(T)
 
 Key tensor after rotary position embedding .
 
-Shape: $(batch, seq\_len, num\_k\_heads, head\_dim)$
+Shape: $(batch, seq\\_len, num\\_k\\_heads, head\\_dim)$
 
 ### `T`: float32, float16, int8
