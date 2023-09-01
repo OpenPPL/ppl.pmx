@@ -9,7 +9,7 @@ $\gamma$ is learnable affine transform parameters with shape as last $D$ dimensi
 
 SkipRMSNorm is performed by the formula below:
 
-$$z=skip\_out=x+skip\_in$$
+$$z=skip\\_out=x+skip\\_in$$
 
 $$y=\frac{z}{\sqrt{E[z^2]+\epsilon}}*\gamma$$
 
