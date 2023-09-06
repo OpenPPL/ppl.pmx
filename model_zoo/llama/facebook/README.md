@@ -29,6 +29,7 @@ Demo.py --ckpt_dir <llama_dir> \
 --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 \
 --quantized_cache 1 --dynamic_batching 1 \
 # --dump_tensor_path <dir_to_dump_input_outputs>
+# --dump_steps <step numbers separated by comma, 0,1,2...>
 ```
 
 If you want to dump some input/output data, uncomment the line above. And **careful for your disk space**.
