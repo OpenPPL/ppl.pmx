@@ -221,25 +221,25 @@ class LLaMA(__TextGenerator__):
 
         if self.model.params.cache_quant_bit == 8:
             scale_head_dim = head_dim // self.model.params.cache_quant_group
-            kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.int8).cuda()
-            kv_scale = torch.zeros(cache_prefix_shape + (scale_head_dim,), dtype=torch.float16).cuda()
+            kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.int8)
+            kv_scale = torch.zeros(cache_prefix_shape + (scale_head_dim,), dtype=torch.float16)
         else:
-            kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.float16).cuda()
+            kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.float16)
             kv_scale = None
 
         seqlen = total_len // 2
-        token_ids = torch.ones(bsz * seqlen, dtype=torch.int64).cuda()
-        start_pos = torch.zeros(bsz, dtype=torch.int64).cuda()
-        seqstarts = torch.arange(0, seqlen * (bsz + 1), seqlen, dtype=torch.int64).cuda()
+        token_ids = torch.ones(bsz * seqlen, dtype=torch.int64)
+        start_pos = torch.zeros(bsz, dtype=torch.int64)
+        seqstarts = torch.arange(0, seqlen * (bsz + 1), seqlen, dtype=torch.int64)
         decoding_batches = torch.tensor([0], dtype=torch.int64)
         max_seqlen = torch.tensor([seqlen])
         attn_mask = torch.empty(0, dtype=torch.float16)
 
         if self.model.params.cache_mode == 0:
-            cachestarts = torch.arange(0, total_len * bsz, total_len, dtype=torch.int64).cuda()
+            cachestarts = torch.arange(0, total_len * bsz, total_len, dtype=torch.int64)
             cachestarts_dim_name = 'batch'
         elif self.model.params.cache_mode == 1:
-            cachestarts = torch.arange(0, total_len * bsz, dtype=torch.int64).cuda()
+            cachestarts = torch.arange(0, total_len * bsz, dtype=torch.int64)
             cachestarts_dim_name = 'total_kvlen'
         else:
             raise Exception("unsupported cache_mode: {}".format(self.model.params.cache_mode))
@@ -289,7 +289,7 @@ class LLaMA(__TextGenerator__):
             os.makedirs(model_path)
 
         torch.onnx.export(
-            self.model,
+            self.model.cpu(),
             (token_ids, attn_mask, 
              seqstarts, seqstarts,
              cachestarts, decoding_batches,

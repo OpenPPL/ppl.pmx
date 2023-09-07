@@ -128,14 +128,14 @@ class LLaMA(__TextGenerator__):
 
         if self.model.params.cache_quant_bit == 8:
             scale_head_dim = head_dim // self.model.params.cache_quant_group
-            kv_cache = torch.zeros(cache_shape_prefix + (head_dim,), dtype=torch.int8).cuda()
-            kv_scale = torch.zeros(cache_shape_prefix + (scale_head_dim,), dtype=torch.float16).cuda()
+            kv_cache = torch.zeros(cache_shape_prefix + (head_dim,), dtype=torch.int8)
+            kv_scale = torch.zeros(cache_shape_prefix + (scale_head_dim,), dtype=torch.float16)
         else:
-            kv_cache = torch.zeros(cache_shape_prefix + (head_dim,), dtype=torch.float16).cuda()
+            kv_cache = torch.zeros(cache_shape_prefix + (head_dim,), dtype=torch.float16)
             kv_scale = None
 
         start_pos = torch.tensor([0])
-        tokens_ids = torch.ones(bsz, total_len // 2).cuda().long()
+        tokens_ids = torch.ones(bsz, total_len // 2).long()
         attn_mask = torch.empty(0, dtype=torch.float16)
 
         input_names = ["token_ids", "attn_mask", "start_pos", "kv_cache", "kv_scale"]
@@ -171,7 +171,7 @@ class LLaMA(__TextGenerator__):
             os.makedirs(model_path)
 
         torch.onnx.export(
-            self.model,
+            self.model.cpu(),
             (tokens_ids, attn_mask,
              start_pos, kv_cache, kv_scale),
             os.path.join(model_path, "model.onnx"),
