@@ -28,6 +28,7 @@ def load(
     dynamic_batching: bool, # use dynamic batching scheduling
     attn_linear_bias_term: bool,
     ffn_linear_bias_term: bool,
+    load_to_cpu: bool,
     dump_tensor_path: str = None,
     dump_steps: List[int] = []
 ) -> __TextGenerator__:
@@ -69,7 +70,10 @@ def load(
         model_params.cache_quant_bit = 0
         model_params.cache_quant_group = 0
 
-    torch.set_default_tensor_type(torch.cuda.HalfTensor)
+    if load_to_cpu:
+        torch.set_default_tensor_type(torch.HalfTensor)
+    else:
+        torch.set_default_tensor_type(torch.cuda.HalfTensor)
     model = Transformer(model_params,
                         friendly_gqa,
                         fused_qkv,
@@ -90,6 +94,8 @@ def load(
         TensorDumper.dir = dump_path
         TensorDumper.enable_dump = True
         TensorDumper.dump_steps = dump_steps
+
+    del checkpoint
 
     print(f"Loaded in {time.time() - start_time:.2f} seconds")
     return generator
