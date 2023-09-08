@@ -37,6 +37,8 @@ def load(
     if dynamic_batching:
         from llama.modeling.dynamic_batching.Model import TensorDumper, Transformer
         from llama.modeling.dynamic_batching.Pipeline import LLaMA
+        if cache_layout != 3:
+            print("Info: we suggest using cache_layout 3 for cuda inference performance")
     else:
         from llama.modeling.static_batching.Model import TensorDumper, Transformer
         from llama.modeling.static_batching.Pipeline import LLaMA

@@ -45,8 +45,8 @@ Define data layout of `cache` and `scale`. Default is zero.
 Meaning of numbers:
 - `0`: $cache(MaxT,L,2,H,Dh)$ and $scale(MaxT,L,2,H,Dh/quant\\_group)$
 - `1`: $cache(L,MaxT,2,H,Dh)$ and $scale(L,MaxT,2,H,Dh/quant\\_group)$
-- `2`: $cache(L,H,MaxT,2,Dh)$ and $scale(L,H,MaxT,2,Dh/quant\\_group)$
-- `3`: $cache(2,L,H,MaxT,Dh)$ and $scale(2,L,H,MaxT,Dh/quant\\_group)$
+- `2`: $cache(L,2,MaxT,H,Dh)$ and $scale(L,2,MaxT,H,Dh/quant\\_group)$
+- `3`: $cache(L,2,H,MaxT,Dh)$ and $scale(L,2,H,MaxT,Dh/quant\\_group)$
 
 ## Inputs
 

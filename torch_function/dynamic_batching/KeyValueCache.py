@@ -149,52 +149,50 @@ class KeyValueCache(torch.autograd.Function):
 
             def process_mode_0_layout_2():
                 if quant_bit > 0:
-                    c, s = quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, :, storebeg:storeend, 0], \
-                    scale[layer_idx, :, storebeg:storeend, 0] =  \
-                        c.transpose(-3, -2), s.transpose(-3, -2)
-                    c, s = quant(current_value[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, :, storebeg:storeend, 1], \
-                    scale[layer_idx, :, storebeg:storeend, 1] =  \
-                        c.transpose(-3, -2), s.transpose(-3, -2)
+                    cache[layer_idx, 0, storebeg:storeend], \
+                    scale[layer_idx, 0, storebeg:storeend] =  \
+                        quant(current_key[seqbeg:seqend], quant_bit, quant_group)
+                    cache[layer_idx, 1, storebeg:storeend], \
+                    scale[layer_idx, 1, storebeg:storeend] =  \
+                        quant(current_value[seqbeg:seqend], quant_bit, quant_group)
                     key[kvbeg:kvend] = dequant(
-                        cache[layer_idx, :, loadbeg:loadend, 0],
-                        scale[layer_idx, :, loadbeg:loadend, 0],
-                        quant_bit, quant_group).transpose(-3, -2)
+                        cache[layer_idx, 0, loadbeg:loadend],
+                        scale[layer_idx, 0, loadbeg:loadend],
+                        quant_bit, quant_group)
                     value[kvbeg:kvend] = dequant(
-                        cache[layer_idx, :, loadbeg:loadend, 1],
-                        scale[layer_idx, :, loadbeg:loadend, 1],
-                        quant_bit, quant_group).transpose(-3, -2)
+                        cache[layer_idx, 1, loadbeg:loadend],
+                        scale[layer_idx, 1, loadbeg:loadend],
+                        quant_bit, quant_group)
                 else:
-                    cache[layer_idx, :, storebeg:storeend, 0] = current_key[seqbeg:seqend].transpose(-3, -2)
-                    cache[layer_idx, :, storebeg:storeend, 1] = current_value[seqbeg:seqend].transpose(-3, -2)
-                    key[kvbeg:kvend] = cache[layer_idx, loadbeg:loadend, 0].transpose(-3, -2)
-                    value[kvbeg:kvend] = cache[layer_idx, loadbeg:loadend, 1].transpose(-3, -2)
+                    cache[layer_idx, 0, storebeg:storeend] = current_key[seqbeg:seqend]
+                    cache[layer_idx, 1, storebeg:storeend] = current_value[seqbeg:seqend]
+                    key[kvbeg:kvend] = cache[layer_idx, 0, loadbeg:loadend]
+                    value[kvbeg:kvend] = cache[layer_idx, 1, loadbeg:loadend]
 
 
             def process_mode_0_layout_3():
                 if quant_bit > 0:
                     c, s = quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[0, layer_idx, :, storebeg:storeend], \
-                    scale[0, layer_idx, :, storebeg:storeend] =  \
+                    cache[layer_idx, 0, :, storebeg:storeend], \
+                    scale[layer_idx, 0, :, storebeg:storeend] =  \
                         c.transpose(-3, -2), s.transpose(-3, -2)
                     c, s = quant(current_value[seqbeg:seqend], quant_bit, quant_group)
-                    cache[1, layer_idx, :, storebeg:storeend], \
-                    scale[1, layer_idx, :, storebeg:storeend] =  \
+                    cache[layer_idx, 1, :, storebeg:storeend], \
+                    scale[layer_idx, 1, :, storebeg:storeend] =  \
                         c.transpose(-3, -2), s.transpose(-3, -2)
                     key[kvbeg:kvend] = dequant(
-                        cache[0, layer_idx, :, loadbeg:loadend],
-                        scale[0, layer_idx, :, loadbeg:loadend],
+                        cache[layer_idx, 0, :, loadbeg:loadend],
+                        scale[layer_idx, 0, :, loadbeg:loadend],
                         quant_bit, quant_group).transpose(-3, -2)
                     value[kvbeg:kvend] = dequant(
-                        cache[1, layer_idx, :, loadbeg:loadend],
-                        scale[1, layer_idx, :, loadbeg:loadend],
+                        cache[layer_idx, 1, :, loadbeg:loadend],
+                        scale[layer_idx, 1, :, loadbeg:loadend],
                         quant_bit, quant_group).transpose(-3, -2)
                 else:
-                    cache[0, layer_idx, :, storebeg:storeend] = current_key[seqbeg:seqend].transpose(-3, -2)
-                    cache[1, layer_idx, :, storebeg:storeend] = current_value[seqbeg:seqend].transpose(-3, -2)
-                    key[kvbeg:kvend] = cache[0, layer_idx, loadbeg:loadend].transpose(-3, -2)
-                    value[kvbeg:kvend] = cache[1, layer_idx, loadbeg:loadend].transpose(-3, -2)
+                    cache[layer_idx, 0, :, storebeg:storeend] = current_key[seqbeg:seqend].transpose(-3, -2)
+                    cache[layer_idx, 1, :, storebeg:storeend] = current_value[seqbeg:seqend].transpose(-3, -2)
+                    key[kvbeg:kvend] = cache[layer_idx, 0, :, loadbeg:loadend].transpose(-3, -2)
+                    value[kvbeg:kvend] = cache[layer_idx, 1, :, loadbeg:loadend].transpose(-3, -2)
 
 
             def process_mode_1_layout_0():
@@ -245,52 +243,50 @@ class KeyValueCache(torch.autograd.Function):
 
             def process_mode_1_layout_2():
                 if quant_bit > 0:
-                    c, s = quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, :, storeidx, 0], \
-                    scale[layer_idx, :, storeidx, 0] =  \
-                        c.transpose(-3, -2), s.transpose(-3, -2)
-                    c, s = quant(current_value[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, :, storeidx, 1], \
-                    scale[layer_idx, :, storeidx, 1] =  \
-                        c.transpose(-3, -2), s.transpose(-3, -2)
+                    cache[layer_idx, 0, storeidx], \
+                    scale[layer_idx, 0, storeidx] =  \
+                        quant(current_key[seqbeg:seqend], quant_bit, quant_group)
+                    cache[layer_idx, 1, storeidx], \
+                    scale[layer_idx, 1, storeidx] =  \
+                        quant(current_value[seqbeg:seqend], quant_bit, quant_group)
                     key[kvbeg:kvend] = dequant(
-                        cache[layer_idx, :, loadidx, 0],
-                        scale[layer_idx, :, loadidx, 0],
-                        quant_bit, quant_group).transpose(-3, -2)
+                        cache[layer_idx, 0, loadidx],
+                        scale[layer_idx, 0, loadidx],
+                        quant_bit, quant_group)
                     value[kvbeg:kvend] = dequant(
-                        cache[layer_idx, :, loadidx, 1],
-                        scale[layer_idx, :, loadidx, 1],
-                        quant_bit, quant_group).transpose(-3, -2)
+                        cache[layer_idx, 1, loadidx],
+                        scale[layer_idx, 1, loadidx],
+                        quant_bit, quant_group)
                 else:
-                    cache[layer_idx, :, storeidx, 0] = current_key[seqbeg:seqend].transpose(-3, -2)
-                    cache[layer_idx, :, storeidx, 1] = current_value[seqbeg:seqend].transpose(-3, -2)
-                    key[kvbeg:kvend] = cache[layer_idx, loadidx, 0].transpose(-3, -2)
-                    value[kvbeg:kvend] = cache[layer_idx, loadidx, 1].transpose(-3, -2)
+                    cache[layer_idx, 0, storeidx] = current_key[seqbeg:seqend]
+                    cache[layer_idx, 1, storeidx] = current_value[seqbeg:seqend]
+                    key[kvbeg:kvend] = cache[layer_idx, 0, loadidx]
+                    value[kvbeg:kvend] = cache[layer_idx, 1, loadidx]
 
 
             def process_mode_1_layout_3():
                 if quant_bit > 0:
                     c, s = quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[0, layer_idx, :, storeidx], \
-                    scale[0, layer_idx, :, storeidx] =  \
+                    cache[layer_idx, 0, :, storeidx], \
+                    scale[layer_idx, 0, :, storeidx] =  \
                         c.transpose(-3, -2), s.transpose(-3, -2)
                     c, s = quant(current_value[seqbeg:seqend], quant_bit, quant_group)
-                    cache[1, layer_idx, :, storeidx], \
-                    scale[1, layer_idx, :, storeidx] =  \
+                    cache[layer_idx, 1, :, storeidx], \
+                    scale[layer_idx, 1, :, storeidx] =  \
                         c.transpose(-3, -2), s.transpose(-3, -2)
                     key[kvbeg:kvend] = dequant(
-                        cache[0, layer_idx, :, loadidx],
-                        scale[0, layer_idx, :, loadidx],
+                        cache[layer_idx, 0, :, loadidx],
+                        scale[layer_idx, 0, :, loadidx],
                         quant_bit, quant_group).transpose(-3, -2)
                     value[kvbeg:kvend] = dequant(
-                        cache[1, layer_idx, :, loadidx],
-                        scale[1, layer_idx, :, loadidx],
+                        cache[layer_idx, 1, :, loadidx],
+                        scale[layer_idx, 1, :, loadidx],
                         quant_bit, quant_group).transpose(-3, -2)
                 else:
-                    cache[0, layer_idx, :, storeidx] = current_key[seqbeg:seqend].transpose(-3, -2)
-                    cache[1, layer_idx, :, storeidx] = current_value[seqbeg:seqend].transpose(-3, -2)
-                    key[kvbeg:kvend] = cache[0, layer_idx, loadidx].transpose(-3, -2)
-                    value[kvbeg:kvend] = cache[1, layer_idx, loadidx].transpose(-3, -2)
+                    cache[layer_idx, 0, :, storeidx] = current_key[seqbeg:seqend].transpose(-3, -2)
+                    cache[layer_idx, 1, :, storeidx] = current_value[seqbeg:seqend].transpose(-3, -2)
+                    key[kvbeg:kvend] = cache[layer_idx, 0, :, loadidx].transpose(-3, -2)
+                    value[kvbeg:kvend] = cache[layer_idx, 1, :, loadidx].transpose(-3, -2)
 
 
             if cache_mode == 0:
