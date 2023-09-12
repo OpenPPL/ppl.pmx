@@ -41,11 +41,11 @@ def cvt_model_args(args: ModelArgs) -> ModelParams:
     return ret
 
 
-def load(params_path: str) -> ModelParams:
+def load(params_path: str) -> ModelArgs:
     with open(params_path, "r") as f:
         params = json.loads(f.read())
 
     model_args: ModelArgs = ModelArgs(**params)
     model_args.n_kv_heads = model_args.n_heads if model_args.n_kv_heads is None else model_args.n_kv_heads
 
-    return cvt_model_args(model_args)
+    return model_args
