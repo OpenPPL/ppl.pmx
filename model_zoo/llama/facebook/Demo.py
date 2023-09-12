@@ -1,6 +1,7 @@
 import fire
 import sys
 import os
+import json
 
 from pathlib import Path
 from typing import List
@@ -9,7 +10,8 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../..")
 
 import llama.modeling.Loader as Loader
 from Tokenizer import Tokenizer
-import Params
+from ModelParams import ModelParams
+import ConvertParamsToPmx
 
 def main(
     ckpt_dir: str,
@@ -33,8 +35,13 @@ def main(
 ):
     tokenizer = Tokenizer(model_path=tokenizer_path)
 
-    params = Params.load(Path(ckpt_dir) / "params.json")
-    params.vocab_size = tokenizer.vocab_size()
+    if not os.path.exists(Path(ckpt_dir) / "pmx_params.json"):
+        print("Info: pmx_params.json not found, do auto param conversion")
+        ConvertParamsToPmx.main(ckpt_dir, tokenizer_path)
+
+    with open(Path(ckpt_dir) / "pmx_params.json", "r") as f:
+        params = json.loads(f.read())
+    params: ModelParams = ModelParams(**params)
 
     generator = Loader.load(
         ckpt_dir, params, friendly_gqa,
