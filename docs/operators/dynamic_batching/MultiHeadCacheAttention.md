@@ -4,7 +4,7 @@ The original definition of `dynamic_batching.MultiHeadAttention` refers to [here
 
 The original definition of `dynamic_batching.KeyValueCache` refers to [here](KeyValueCache.md).
 
-For `dynamic_batching.MultiHeadCacheAttention`, it is just fuse `dynamic_batching.MultiHeadAttention` and `dynamic_batching.KeyValueCache` togather.
+For `dynamic_batching.MultiHeadCacheAttention`, it is just fuse `dynamic_batching.MultiHeadAttention` and `dynamic_batching.KeyValueCache` together.
 
 ## Attributes/Parameters
 

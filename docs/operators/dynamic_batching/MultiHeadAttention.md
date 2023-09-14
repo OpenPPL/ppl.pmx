@@ -4,7 +4,7 @@ The original definition of `MultiHeadAttention` refers to [here](../MultiHeadAtt
 
 For `dynamic_batching.MultiHeadAttention`, sequence length and key/value length of each batch are different.
 
-Because dynamic batching will combine decoding attention and first-fill attention togather, we have to pass some information to separate input into two part by `decoding_batches`.
+Because dynamic batching will combine decoding attention and first-fill attention together, we have to pass some information to separate input into two part by `decoding_batches`.
 The first part in the front is decoding part, whose size is equal to `decoding_batches`, will never apply causal mask. And the batches remain are first-fill part, who will be apply with causal mask if `is_causal` is `True`.
 
 ## Attributes/Parameters
