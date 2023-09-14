@@ -28,8 +28,18 @@ And then use it as Pytorch's functional API:
 norm, skip_out = PMX.skip_rms_norm(x, weight, skip_in, -1, eps)
 ```
 
+We can use these API in pytorch to custom your own model.
+
 All PMX function could be exported as custom operators by `torch.onnx.export`.
+
+# Model Zoo
+
+Some opensource model are provided in our model zoo.
+
+Currently models:
+
+- [LLaMA 1/2](model_zoo/llama)
 
 # Exporting LLM model in the model zoo
 
-- [LLaMA](model_zoo/llama/facebook/README.md)
+- [Facebook LLaMA](model_zoo/llama/facebook/README.md)
