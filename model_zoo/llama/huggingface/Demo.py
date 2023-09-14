@@ -34,10 +34,6 @@ def main(
 ):
     tokenizer = Tokenizer(model_path=tokenizer_path)
 
-    if not os.path.exists(Path(ckpt_dir) / "pmx_params.json"):
-        print("Info: pmx_params.json not found, do auto param conversion")
-        ConvertParamsToPmx.main(ckpt_dir, tokenizer_path)
-
     with open(Path(ckpt_dir) / "pmx_params.json", "r") as f:
         params = json.loads(f.read())
     params: ModelParams = ModelParams(**params)

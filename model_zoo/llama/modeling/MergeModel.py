@@ -21,6 +21,7 @@ def write_json(text, path):
 
 
 def merge_pmx_model(model_path, input_base_path, num_shards):
+    os.makedirs(model_path, exist_ok=True)
     params = read_json(os.path.join(input_base_path, "pmx_params.json"))
     # weight sharding
     hidden_dim = params['hidden_dim']

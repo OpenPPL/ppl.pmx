@@ -109,16 +109,6 @@ def write_pmx_model(model_path, input_base_path):
         "norm.weight": hf_model_state_dict["model.norm.weight"],
         "output.weight": hf_model_state_dict["lm_head.weight"]
     })
-    # check 7B
-    '''
-    cor_dict = torch.load('/mnt/hpc/share/llama_model/LLaMA/7B/consolidated.00.pth', map_location="cpu")
-    for k,v in cor_dict.items():
-        print (k)
-        if 'rope.freqs' in k: continue
-        diff = state_dict[k] - cor_dict[k]
-        if diff.max() != 0 or diff.min() != 0:
-            import ipdb;ipdb.set_trace()
-    '''
     torch.save(state_dict, os.path.join(model_path, "model.pth"))
 
 
