@@ -31,7 +31,7 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
     # TO DO: GQA / MQA, only test on llama
     num_local_key_value_heads = n_heads_per_shard
     key_value_dim = hidden_dim
-    num_key_value_heads = params['n_kv_heads'] if 'n_kv_heads' in params else params['num_heads']
+    num_key_value_heads = params['num_kv_heads'] if 'num_kv_heads' in params else params['num_heads']
     dims_per_head = hidden_dim // params['num_heads']
     write_json(params, os.path.join(model_path, "pmx_params.json"))
 
