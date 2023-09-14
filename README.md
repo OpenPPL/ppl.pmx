@@ -1,5 +1,13 @@
 # About PMX
 
+`ppl.pmx` is(but not only) a part of `PPL.LLM` system.
+
+![SYSTEM_OVERVIEW](https://github.com/openppl-public/ppl.nn.llm/blob/master/docs/system_overview.png)
+
+**We recommend users who are new to this project to read the [Overview of system](https://github.com/openppl-public/ppl.nn.llm/blob/master/docs/system_overview.md).**
+
+---
+
 PPL Model Exchange (PMX) is an open ecosystem that empowers AI developers to choose the right tools as their project evolves. PMX provides an open source format for AI models. It defines an extensible computation graph model, as well as definitions of built-in operators and standard data types.
 
 Currently PMX focus on the capabilities and hardware friendliness needed for Large Language Model(LLM) inferencing.
