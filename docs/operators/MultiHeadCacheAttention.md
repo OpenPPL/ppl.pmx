@@ -4,7 +4,7 @@ The original definition of `MultiHeadAttention` refers to [here](MultiHeadAttent
 
 The original definition of `KeyValueCache` refers to [here](KeyValueCache.md).
 
-For `MultiHeadCacheAttention`, it is just fuse `MultiHeadAttention` and `KeyValueCache` togather.
+For `MultiHeadCacheAttention`, it is just fuse `MultiHeadAttention` and `KeyValueCache` together.
 
 Allows the model to jointly attend to information from different representation subspaces as described in the paper: [Attention Is All You Need](https://arxiv.org/abs/1706.03762).
 
