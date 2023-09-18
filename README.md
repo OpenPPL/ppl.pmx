@@ -47,7 +47,5 @@ Some opensource model are provided in our model zoo.
 Currently models:
 
 - [LLaMA 1/2](model_zoo/llama)
-
-# Exporting LLM model in the model zoo
-
-- [Facebook LLaMA](model_zoo/llama/facebook/README.md)
+    - [Exporting Facebook(Meta)'s LLaMA](model_zoo/llama/facebook)
+    - [Exporting Huggingfaces's LLaMA](model_zoo/llama/huggingface)
