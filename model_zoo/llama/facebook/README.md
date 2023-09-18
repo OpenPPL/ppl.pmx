@@ -23,7 +23,7 @@ pip install -r requirements.txt
 We recommand converting facebook's `params.json` to pmx's `params.json` before running or exporting the model. Because it is needed by the model merging and spliting tools.
 
 ```bash
-ConvertParamsToPmx.py -ckpt_dir <llama_dir> --tokenizer_path <llama_tokenizer_path>
+ConvertParamsToPmx.py -ckpt_dir <llama_dir> --tokenizer_path <llama_tokenizer_dir>/tokenizer.model
 ```
 
 You can find `pmx_params.json` in `<llama_dir>` after the conversion.
@@ -35,7 +35,7 @@ You can test wether the model is corret before exporting.
 ```bash
 OMP_NUM_THREADS=1 torchrun --nproc_per_node <MP> \
 Demo.py --ckpt_dir <llama_dir> \
---tokenizer_path <llama_tokenizer_path> \
+--tokenizer_path <llama_tokenizer_dir>/tokenizer.model \
 --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 \
 --quantized_cache 1 --dynamic_batching 1 \
 # --dump_tensor_path <dir_to_dump_input_outputs>
@@ -49,7 +49,7 @@ If you want to dump some input/output data, uncomment the line above. And **care
 ```bash
 OMP_NUM_THREADS=1 torchrun --nproc_per_node <MP> \
 Export.py --ckpt_dir <llama_dir> \
---tokenizer_path <llama_tokenizer_path> \
+--tokenizer_path <llama_tokenizer_dir>/tokenizer.model \
 --export_path <path_to_store_exported_llama7b>
 --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 \
 --quantized_cache 1 --dynamic_batching 1 \

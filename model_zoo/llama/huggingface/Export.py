@@ -8,9 +8,7 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../..")
 
 import llama.modeling.Loader as Loader
-from Tokenizer import Tokenizer
 from ModelParams import ModelParams
-import ConvertParamsToPmx
 
 def main(
     ckpt_dir: str,
