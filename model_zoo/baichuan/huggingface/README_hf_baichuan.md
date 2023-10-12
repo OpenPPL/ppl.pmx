@@ -2,7 +2,7 @@
 
 ## Download model from Hugging Face
 
-Download the model file from the [Hugging Face](https://huggingface.co/internlm/internlm-7b).
+Download the model file from the [Hugging Face](https://huggingface.co/baichuan-inc/Baichuan-7B).
 
 ## Convert model params
 
