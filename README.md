@@ -49,3 +49,7 @@ Currently models:
 - [LLaMA 1/2](model_zoo/llama)
     - [Exporting Facebook(Meta)'s LLaMA](model_zoo/llama/facebook)
     - [Exporting Huggingfaces's LLaMA](model_zoo/llama/huggingface)
+- [Baichuan7B](model_zoo/baichuan)
+    - [Exporting Huggingfaces's Baichuan7B](model_zoo/baichuan/huggingface)
+- [InternLM](model_zoo/internlm)
+    - [Exporting Huggingfaces's InternLM](model_zoo/internlm/huggingface)
