@@ -107,6 +107,6 @@ if __name__ == "__main__":
 
     model_str1 = torch.onnx.export_to_pretty_string(
        rotary, (q, k, seqstarts, start_pos, max_seqlen), "RotaryPositionEmbedding1.onnx",
-       input_names=["query", "key", "seqstarts", "start_pos"], output_names=["query_out", "key_out"], opset_version=11)
+       input_names=["query", "key", "seqstarts", "start_pos", "max_seqlen"], output_names=["query_out", "key_out"], opset_version=11)
 
     print(model_str1)
