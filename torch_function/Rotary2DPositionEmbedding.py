@@ -43,9 +43,14 @@ class Rotary2DPositionEmbedding(torch.autograd.Function):
             pos1[:, 0] = iters
         pos0, pos1 = pos0.float(), pos1.float()
 
+
+        # transfer to real mode
+        _query = query.view(*query.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+        _key = key.view(*key.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+        
         # feature chunk
-        query1, query2 = query.chunk(2, dim=(query.ndim - 1))
-        key1, key2 = key.chunk(2, dim=(key.ndim - 1))
+        query1, query2 = _query.chunk(2, dim=(_query.ndim - 1))
+        key1, key2 = _key.chunk(2, dim=(_key.ndim - 1))
 
         # generate cos cache, sin cache
         freqs = (1.0 / (theta ** (torch.arange(0, rotary_dim, 2, dtype=torch.float, device=query.device)[: (rotary_dim // 2)] / rotary_dim)))
@@ -62,13 +67,11 @@ class Rotary2DPositionEmbedding(torch.autograd.Function):
 
 
         def do_rotate(x_rot: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor):
-            x_rot = x_rot.view(*x_rot.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
             x_a = x_rot[..., :x_rot.shape[-1]//2]
             x_b = x_rot[..., x_rot.shape[-1]//2:]
             x_a_embed = x_a * cos - x_b * sin
             x_b_embed = x_b * cos + x_a * sin
             x_embed = torch.cat((x_a_embed, x_b_embed), dim=-1)
-            x_embed = x_embed.view(*x_rot.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
             return x_embed
 
         query1_emb = do_rotate(query1.float(), cos1, sin1)
@@ -78,6 +81,9 @@ class Rotary2DPositionEmbedding(torch.autograd.Function):
 
         rotated_query = torch.cat((query1_emb, query2_emb), dim=-1)
         rotated_key = torch.cat((key1_emb, key2_emb), dim=-1)
+
+        rotated_query = rotated_query.view(*rotated_query.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
+        rotated_key = rotated_key.view(*rotated_key.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
 
         return rotated_query.type_as(query), rotated_key.type_as(key)
 
