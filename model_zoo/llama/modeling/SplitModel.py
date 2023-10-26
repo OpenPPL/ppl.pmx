@@ -71,6 +71,14 @@ def split_pmx_model(model_path, input_base_path, num_shards):
         "output.weight": output_weight
     })
 
+    # only split RowParallelLinear bias
+    for key in state_dict.keys():
+        if 'wo.bias' in key: continue
+        if 'bias' in key:
+            bias_dim = state_dict[key].shape[0]
+            split_bias = state_dict[key].split([bias_dim // num_shards]*num_shards)
+            state_dict.update({key: split_bias})
+
     # dump weight
     tmp_weight_list = [{} for _ in range(num_shards)]
     for key, value in state_dict.items():
