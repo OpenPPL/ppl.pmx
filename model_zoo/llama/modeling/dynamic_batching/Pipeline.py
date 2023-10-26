@@ -231,6 +231,7 @@ class LLaMA(__TextGenerator__):
         token_ids = torch.ones(bsz * seqlen, dtype=torch.int64)
         start_pos = torch.zeros(bsz, dtype=torch.int64)
         seqstarts = torch.arange(0, seqlen * (bsz + 1), seqlen, dtype=torch.int64)
+        kvstarts = torch.arange(0, seqlen * (bsz + 1), seqlen, dtype=torch.int64)
         decoding_batches = torch.tensor([0], dtype=torch.int64)
         max_seqlen = torch.tensor([seqlen])
         attn_mask = torch.empty(0, dtype=torch.float16)
@@ -291,7 +292,7 @@ class LLaMA(__TextGenerator__):
         torch.onnx.export(
             self.model.cpu(),
             (token_ids, attn_mask, 
-             seqstarts, seqstarts,
+             seqstarts, kvstarts,
              cachestarts, decoding_batches,
              start_pos, max_seqlen, max_seqlen,
              kv_cache, kv_scale),

@@ -29,17 +29,19 @@ class RotaryPositionEmbedding(torch.autograd.Function):
         dim = query.shape[2] if rotary_dim == 0 else rotary_dim
 
         def do_rotate(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor):
-            x_rot = x[..., :dim]
-            x_pass = x[..., dim:]
-            x_rot = x_rot.view(*x_rot.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+            _x = x.view(*x.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+
+            x_rot = _x[..., :dim]
+            x_pass = _x[..., dim:]
             x_a = x_rot[..., :x_rot.shape[-1] // 2]
             x_b = x_rot[..., x_rot.shape[-1] // 2:]
             x_a_embed = x_a * cos - x_b * sin
             x_b_embed = x_b * cos + x_a * sin
             x_embed = torch.cat((x_a_embed, x_b_embed), dim=-1)
-            x_embed = x_embed.view(*x_rot.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
-            return torch.cat((x_embed, x_pass), dim=-1)
 
+            x_embed = torch.cat((x_embed, x_pass), dim=-1)
+            x_embed = x_embed.view(*x_embed.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
+            return x_embed
 
         rotated_query = torch.zeros_like(query)
         rotated_key = torch.zeros_like(key)
