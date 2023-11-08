@@ -70,6 +70,8 @@ class MultiHeadAttention(torch.autograd.Function):
         _key = _key.transpose(1, 2)
         _value = _value.transpose(1, 2)
         scores = torch.matmul(_query, _key.transpose(2, 3)) / torch.math.sqrt(head_dim)
+        #import ipdb;ipdb.set_trace()
+        # insert alibi here
         if causal_mask is not None:
             scores = scores + causal_mask
         if attn_mask is not None and attn_mask.numel() > 0:
@@ -116,7 +118,7 @@ if __name__ == "__main__":
     attn_mask = torch.randn(bs, num_heads, seqlen, seqlen)
 
     test_op1 = TestModule1(num_heads, num_kv_heads, head_dim, True)
-    
+
     model_str1 = torch.onnx.export_to_pretty_string(
        test_op1, (q, k, v), "MultiHeadAttention1.onnx",
        input_names=["query", "key", "value"], output_names=["attention_output"], opset_version=11)
