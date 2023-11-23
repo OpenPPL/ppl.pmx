@@ -8,7 +8,7 @@ class Rotary2DPositionEmbedding(torch.autograd.Function):
                 max_seqlen: torch.Value, first_seq_len: torch.Value,
                 theta: float = 10000.0, bypass_key: bool = False):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
-        rotated_query, rotated_key = g.op('pmx.dynamic_batching::RotaryPositionEmbedding',
+        rotated_query, rotated_key = g.op('pmx.dynamic_batching::Rotary2DPositionEmbedding',
             query, key, seqstarts, start_pos, max_seqlen, first_seq_len,
             theta_f=theta,
             bypass_key_i=bypass_key,
@@ -23,7 +23,7 @@ class Rotary2DPositionEmbedding(torch.autograd.Function):
 
         if torch.onnx.is_in_onnx_export():
             return query, key
- 
+
         # shape of query, key: [seqstarts[batch], num_heads, head_dim]
         
         dim = query.shape[-1] // 2
@@ -36,17 +36,19 @@ class Rotary2DPositionEmbedding(torch.autograd.Function):
             x_embed = torch.cat((x_a_embed, x_b_embed), dim=-1)
             return x_embed
 
-        # transfer to real mode
-        _query = query.view(*query.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
-        _key = key.view(*key.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
-        
         # feature chunk
-        query1, query2 = _query.chunk(2, dim=(_query.ndim - 1))
-        key1, key2 = _key.chunk(2, dim=(_key.ndim - 1))
-    
+        query1, query2 = query.chunk(2, dim=(query.ndim - 1))
+        key1, key2 = key.chunk(2, dim=(key.ndim - 1))
+
+        # transfer to real mode
+        query1 = query1.view(*query1.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+        query2 = query2.view(*query2.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+
+        key1 = key1.view(*key1.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+        key2 = key2.view(*key2.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+
         rotated_query1, rotated_query2 = torch.zeros_like(query1), torch.zeros_like(query2)
         rotated_key1, rotated_key2 = torch.zeros_like(key1), torch.zeros_like(key2)
-        
         freqs = (1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float, device=query.device)[: (dim // 2)] / dim)))
         seqlens = seqstarts[1:] - seqstarts[:-1]
         for b, seqlen in enumerate(seqlens):
@@ -74,15 +76,15 @@ class Rotary2DPositionEmbedding(torch.autograd.Function):
             rotated_query2[seqbeg:seqend] = do_rotate(query2[seqbeg:seqend].float(), cos2, sin2).type_as(query)
             rotated_key2[seqbeg:seqend] = key2[seqbeg:seqend] if bypass_key else do_rotate(key2[seqbeg:seqend].float(), cos2, sin2).type_as(key)
 
+        rotated_query1 = rotated_query1.view(*rotated_query1.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
+        rotated_query2 = rotated_query2.view(*rotated_query1.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
+        rotated_key1 = rotated_key1.view(*rotated_key1.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
+        rotated_key2 = rotated_key2.view(*rotated_key2.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
+
         rotated_query = torch.cat((rotated_query1, rotated_query2), dim=-1)
         rotated_key = torch.cat((rotated_key1, rotated_key2), dim=-1)
-        
-        rotated_query = rotated_query.view(*rotated_query.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
-        rotated_key = rotated_key.view(*rotated_key.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
 
         return rotated_query.type_as(query), rotated_key.type_as(key)
-    
-
 
 def rotary_2d_position_embedding(query: torch.Tensor, key: torch.Tensor, 
                 seqstarts: torch.Tensor, start_pos: torch.Tensor,

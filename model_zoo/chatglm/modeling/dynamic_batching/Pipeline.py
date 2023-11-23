@@ -130,6 +130,7 @@ class ChatGLM(__TextGenerator__):
             _kvstarts = _kvstarts.cuda()
 
             attn_mask = None
+            padded_attn_mask = None
             if decoding_batches < current_batches:   # 存在prefill阶段的batch
                 attn_mask = torch.zeros((_seqstarts[-1], _kvstarts[-1]), dtype=torch.float16).cuda()
                 for b in range(decoding_batches, current_batches):
@@ -140,7 +141,13 @@ class ChatGLM(__TextGenerator__):
 
                     attn_mask[seqbeg:seqend, kvbeg:kvend][:, -1] = float("-inf")
                     attn_mask[seqbeg:seqend, kvbeg:kvend][-1, -1] = 0.0
-            logits = self.model.forward(_tokens_ids, attn_mask, _seqstarts, _kvstarts,
+
+                    after_padding_size = (attn_mask.shape[-1] + 8 - 1) // 8 * 8
+                    padded_attn_mask = torch.zeros([after_padding_size, after_padding_size], dtype=torch.float16).cuda()
+                    padded_attn_mask[:attn_mask.shape[-2], :attn_mask.shape[-1]] = attn_mask
+                    print(padded_attn_mask.shape)
+
+            logits = self.model.forward(_tokens_ids, padded_attn_mask, _seqstarts, _kvstarts,
                                         _cachestarts, decoding_batches,
                                         _start_pos, max_seqlen, max_kvlen,
                                         _first_seqlen, kv_cache, kv_scale)

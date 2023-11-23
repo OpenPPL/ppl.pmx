@@ -16,6 +16,9 @@ class __TensorDumper__:
         if len(self.dump_steps) > 0 and self.step not in self.dump_steps:
             return
 
+        if X is None:
+            X = torch.empty(0)
+
         shape_str = "" if X.dim == 0 else str(X.shape[0])
         for d in X.shape[1:]:
             shape_str = shape_str + "_" + str(d)

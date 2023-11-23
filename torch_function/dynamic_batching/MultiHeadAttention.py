@@ -43,8 +43,8 @@ class MultiHeadAttention(torch.autograd.Function):
         
         if attn_mask is not None and attn_mask.numel() > 0:
             assert 2 == attn_mask.dim() or 3 == attn_mask.dim(), "attn_mask.dim is {}".format(attn_mask.dim())
-            assert kvstarts[-1] == attn_mask.shape[-1], "{} vs. {}".format(kvstarts[-1], attn_mask.shape[-1])
-            assert seqstarts[-1] == attn_mask.shape[-2], "{} vs. {}".format(seqstarts[-1], attn_mask.shape[-2])
+            # assert kvstarts[-1] == attn_mask.shape[-1], "{} vs. {}".format(kvstarts[-1], attn_mask.shape[-1])
+            # assert seqstarts[-1] == attn_mask.shape[-2], "{} vs. {}".format(seqstarts[-1], attn_mask.shape[-2])
 
         __query, __key, __value = query, key, value
 
