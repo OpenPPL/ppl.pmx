@@ -227,6 +227,7 @@ class Transformer(nn.Module):
                  fused_kvcache: bool,
                  attn_linear_bias_term: bool,
                  ffn_linear_bias_term: bool,
+                 rotary_dim: int, 
                  proc_group: dist.ProcessGroup):
         super().__init__()
         self.params = params

@@ -12,6 +12,7 @@ import llama.modeling.Loader as Loader
 from Tokenizer import Tokenizer
 from ModelParams import ModelParams
 
+
 def main(
     ckpt_dir: str,
     tokenizer_path: str,
@@ -24,29 +25,31 @@ def main(
     friendly_gqa: bool = False, # done gqa by repeating key and value by key_value_cache op
     fused_qkv: bool = True, # fuse qkv linear
     fused_kvcache: bool = True, # fuse key_value_cache and multi_head_attention
-    auto_causal: bool = True, # causal mask is auto done by attention op, no need to pass additional mask to the model
+ 
     quantized_cache: bool = True, # 8bit kv cache quantization
     cache_layout: int = 0, # change kv cache layout for hardware performance friendly
     cache_mode: int = 0, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
-    dynamic_batching: bool = False, # use dynamic batching scheduling
+    dynamic_batching: bool = True, # use dynamic batching scheduling
     dump_tensor_path: str = None,
     dump_steps: List[int] = []
 ):
+
     tokenizer = Tokenizer(model_path=tokenizer_path)
 
     with open(Path(ckpt_dir) / "pmx_params.json", "r") as f:
         params = json.loads(f.read())
     params: ModelParams = ModelParams(**params)
-
+    head_dim = params.hidden_dim // params.num_heads
     generator = Loader.load(
         ckpt_dir, params, friendly_gqa,
-        fused_qkv, fused_kvcache, auto_causal,
+        fused_qkv, fused_kvcache, True,
         quantized_cache, cache_layout,
         cache_mode, dynamic_batching,
-        False, False, False, False,
-        0, dump_tensor_path, dump_steps
+        True, False, False, False,
+        head_dim // 2,
+        dump_tensor_path, dump_steps
     )
-
+    
     if unaligned_batch:
         test_prompt = [        # For these prompts, the expected answer is the natural continuation of the prompt
         "I believe the meaning of life is",
@@ -70,7 +73,8 @@ def main(
         for _ in range((batch - 1) // len(test_prompt)):
             prompt_tokens.extend(test_prompt)
     else:
-        test_prompt = "I believe the meaning of life is"
+        # test_prompt = "I believe the meaning of life is"
+        test_prompt = "[Round 1]\n\n问：你好\n\n答："
         test_prompt = tokenizer.encode(test_prompt, bos=True, eos=False)
 
         _scale_up_prompt = []
@@ -80,6 +84,7 @@ def main(
 
         prompt_tokens = [test_prompt for _ in range(batch)]
 
+    # print("prompt_tokens: ", prompt_tokens)
     print(f"prepared {len(prompt_tokens)} prompts")
     results = generator.generate(
         prompt_tokens[:batch], tokenizer.get_eos_id(), tokenizer.get_pad_id(),
@@ -89,7 +94,6 @@ def main(
     for result in results:
         print(tokenizer.decode(result))
         print("\n==================================\n")
-
-
+        
 if __name__ == "__main__":
     fire.Fire(main)

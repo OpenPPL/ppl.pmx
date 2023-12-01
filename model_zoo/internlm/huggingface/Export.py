@@ -33,7 +33,7 @@ def main(
         fused_qkv, fused_kvcache, auto_causal,
         quantized_cache, cache_layout,
         cache_mode, dynamic_batching,
-        True, False, True
+        True, True, False, True
     )
 
     generator.export(export_path)
