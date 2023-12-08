@@ -217,7 +217,7 @@ class TransformerBlock(nn.Module):
                                    fused_kvcache,
                                    attn_linear_bias_term,
                                    proc_group=proc_group)
-        self.feed_forward = FeedForward(args, 
+        self.feed_forward = FeedForward(args,
                                         layer_id,
                                         ffn_linear_bias_term,
                                         proc_group=proc_group)
@@ -261,6 +261,7 @@ class Transformer(nn.Module):
         self.proc_group = proc_group
         self.fused_qkv = fused_qkv
         self.fused_kvcache = fused_kvcache
+        self.num_heads = params.num_heads
 
         world_size = 1 if proc_group is None else proc_group.size()
         num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
@@ -314,6 +315,7 @@ class Transformer(nn.Module):
         if kv_scale is not None:
             TensorDumper.dump(kv_scale, "kv_scale")
 
+        attn_mask = PMX.dynamic_batching.alibi_position_embedding(seqstarts, kvstarts, attn_mask, self.num_heads, h.dtype)
         norm = None
         for layer in self.layers:
             h, norm = layer(h, norm, attn_mask, seqstarts, kvstarts, cachestarts,
@@ -329,7 +331,7 @@ class Transformer(nn.Module):
         output = output.float()
         TensorDumper.dump(output, "logits")
         return output
-    
+
 
     @torch.no_grad()
     def load_state_dict(self, state_dict: Mapping[str, Any]):
@@ -370,7 +372,7 @@ class Transformer(nn.Module):
                         print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
             except AttributeError as e:
                 raise Exception(f'Failed to inject model weight {key}, can not find corresponding layer.')
-        
+
         for key in state_dict:
             if key not in loaded_params:
                 print(f'{key} is not loaded.')

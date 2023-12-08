@@ -50,6 +50,7 @@ class Attention(nn.Module):
 
         world_size = 1 if proc_group is None else proc_group.size()
 
+        self.num_heads = args.num_heads
         self.num_kv_heads = args.num_heads if args.num_kv_heads is None else args.num_kv_heads
         self.num_local_heads = args.num_heads // world_size
         self.num_local_kv_heads = self.num_kv_heads // world_size
@@ -86,7 +87,8 @@ class Attention(nn.Module):
 
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor],
-                start_pos: torch.Tensor, kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
+                start_pos: torch.Tensor, seqlen_q: torch.Tensor, seqlen_kv: torch.Tensor,
+                kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
         expanded_shape = (0, 0, -1, self.head_dim)
         if self.fused_qkv:
             xqkv = self.wqkv(x)
@@ -102,11 +104,6 @@ class Attention(nn.Module):
         # TensorDumper.dump(xq, "layer{}_reshaped_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
-
-        xq, xk = PMX.rotary_position_embedding(xq, xk, start_pos)
-        # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
-        # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
-        import ipdb;ipdb.set_trace()
 
         if self.fused_kvcache:
             attn = PMX.multi_head_cache_attention(
@@ -209,11 +206,12 @@ class TransformerBlock(nn.Module):
 
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor, attn_mask: Optional[torch.Tensor],
-                start_pos: torch.Tensor, kv_cache: torch.Tensor, kv_sacle: torch.Tensor = None):
+                start_pos: torch.Tensor, seqlen_q: torch.Tensor, seqlen_kv: torch.Tensor,
+                kv_cache: torch.Tensor, kv_sacle: torch.Tensor = None):
         norm, x = self.attention_norm(x, skip)
         # TensorDumper.dump(norm, "layer{}_attention_norm_out".format(self.layer_id))
         # TensorDumper.dump(x, "layer{}_attention_norm_skip_out".format(self.layer_id))
-        attn = self.attention.forward(norm, attn_mask, start_pos, kv_cache, kv_sacle)
+        attn = self.attention.forward(norm, attn_mask, start_pos, seqlen_q, seqlen_kv, kv_cache, kv_sacle)
         norm, h = self.ffn_norm(x, attn)
         # TensorDumper.dump(norm, "layer{}_ffn_norm_out".format(self.layer_id))
         # TensorDumper.dump(h, "layer{}_ffn_norm_skip_out".format(self.layer_id))
@@ -236,6 +234,7 @@ class Transformer(nn.Module):
         self.proc_group = proc_group
         self.fused_qkv = fused_qkv
         self.fused_kvcache = fused_kvcache
+        self.num_heads = params.num_heads
 
         world_size = 1 if proc_group is None else proc_group.size()
         num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
@@ -264,7 +263,8 @@ class Transformer(nn.Module):
 
     @torch.inference_mode()
     def forward(self, tokens: torch.Tensor, attn_mask: Optional[torch.Tensor],
-                start_pos: torch.Tensor, kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
+                start_pos: torch.Tensor, seqlen_q: torch.Tensor, seqlen_kv: torch.Tensor,
+                kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
         h = self.tok_embeddings(tokens)
         # TensorDumper.dump(h, "emb_out")
 
@@ -279,10 +279,11 @@ class Transformer(nn.Module):
         TensorDumper.dump(kv_cache, "kv_cache")
         if kv_scale is not None:
             TensorDumper.dump(kv_scale, "kv_scale")
+        attn_mask = PMX.alibi_position_embedding(seqlen_q, seqlen_kv, attn_mask, self.num_heads, h.dtype)
 
         norm = None
         for layer in self.layers:
-            h, norm = layer(h, norm, attn_mask, start_pos, kv_cache, _kv_scale)
+            h, norm = layer(h, norm, attn_mask, start_pos, seqlen_q, seqlen_kv, kv_cache, _kv_scale)
 
         h, norm = self.norm(h, norm)
         # TensorDumper.dump(h, "last_rms_norm")
