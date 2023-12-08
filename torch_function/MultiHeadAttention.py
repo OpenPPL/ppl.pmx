@@ -31,7 +31,7 @@ class MultiHeadAttention(torch.autograd.Function):
         if attn_mask is not None and attn_mask.numel() > 0:
             assert attn_mask.dim() == 2 or attn_mask.dim() == 4, "attn_mask.dim() is {}".format(attn_mask.dim())
             if attn_mask.dim() == 4:
-                assert query.shape[0] == attn_mask.shape[0], "{} is not equal to {}".format(query.shape[0], attn_mask.shape[0])
+                #assert query.shape[0] == attn_mask.shape[0], "{} is not equal to {}".format(query.shape[0], attn_mask.shape[0])
                 assert num_heads == attn_mask.shape[1], "{} is not equal to {}".format(num_heads, attn_mask.shape[1])
             assert query.shape[1] == attn_mask.shape[-2], "{} is not equal to {}".format(query.shape[1], attn_mask.shape[-2])
             assert key.shape[1] == attn_mask.shape[-1], "{} is not equal to {}".format(key.shape[1], attn_mask.shape[-1])
@@ -70,12 +70,10 @@ class MultiHeadAttention(torch.autograd.Function):
         _key = _key.transpose(1, 2)
         _value = _value.transpose(1, 2)
         scores = torch.matmul(_query, _key.transpose(2, 3)) / torch.math.sqrt(head_dim)
-        #import ipdb;ipdb.set_trace()
-        # insert alibi here
         if causal_mask is not None:
             scores = scores + causal_mask
         if attn_mask is not None and attn_mask.numel() > 0:
-            scores = scores + attn_mask
+            scores = scores + attn_mask.to(scores.device)
         scores = torch.nn.functional.softmax(scores.float(), dim=-1).type_as(_query)
         output = torch.matmul(scores, _value)
         output = output.transpose(1, 2).contiguous()

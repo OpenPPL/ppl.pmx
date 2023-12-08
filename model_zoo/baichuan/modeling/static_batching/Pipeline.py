@@ -70,6 +70,8 @@ class BaiChuan(__TextGenerator__):
         for cur_pos in range(min_prompt_size, total_len):
             token_ids = tokens_ids[:, prev_pos:cur_pos]
             start_pos = torch.tensor([prev_pos])
+            seqlen_q = torch.tensor(cur_pos - prev_pos)
+            seqlen_kv = torch.tensor(cur_pos)
             TensorDumper.step = cur_pos - min_prompt_size
 
             attn_mask = torch.empty(0, dtype=torch.float16)
@@ -77,7 +79,7 @@ class BaiChuan(__TextGenerator__):
                 attn_mask = torch.full((min_prompt_size, min_prompt_size), float("-inf")).cuda()
                 attn_mask = torch.triu(attn_mask, diagonal=1).to(torch.float16)
 
-            logits = self.model.forward(token_ids, attn_mask, start_pos, kv_cache, kv_scale)
+            logits = self.model.forward(token_ids, attn_mask, start_pos, seqlen_q, seqlen_kv, kv_cache, kv_scale)
             if temperature > 0:
                 probs = torch.softmax(logits / temperature, dim=-1)
                 next_token = sample_top_p(probs, top_p)
@@ -135,10 +137,12 @@ class BaiChuan(__TextGenerator__):
             kv_scale = None
 
         start_pos = torch.tensor([0])
+        seqlen_q = torch.tensor([0])
+        seqlen_kv = torch.tensor([0])
         tokens_ids = torch.ones(bsz, total_len // 2).long()
         attn_mask = torch.empty(0, dtype=torch.float16)
 
-        input_names = ["token_ids", "attn_mask", "start_pos", "kv_cache", "kv_scale"]
+        input_names = ["token_ids", "attn_mask", "start_pos", "seqlen_q", "seqlen_kv", "kv_cache", "kv_scale"]
         output_names = ["logits"]
 
         dynamic_axes = {
@@ -173,7 +177,7 @@ class BaiChuan(__TextGenerator__):
         torch.onnx.export(
             self.model.cpu(),
             (tokens_ids, attn_mask,
-             start_pos, kv_cache, kv_scale),
+             start_pos, seqlen_q, seqlen_kv, kv_cache, kv_scale),
             os.path.join(model_path, "model.onnx"),
             input_names=input_names,
             output_names=output_names,
