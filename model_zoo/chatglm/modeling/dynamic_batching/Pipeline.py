@@ -11,10 +11,9 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 from ModelUtils import __Tokenizer__, __TextGenerator__
 
 
-class LLaMA(__TextGenerator__):
+class ChatGLM(__TextGenerator__):
     def __init__(self, model: Transformer):
         self.model = model
-
 
     def generate(
         self,
@@ -38,7 +37,7 @@ class LLaMA(__TextGenerator__):
 
         unprocessed_prompt_tokens_ids = []
         total_prompt_len = 0
-        for i, p in enumerate(prompts_ids):
+        for _, p in enumerate(prompts_ids):
             unprocessed_prompt_tokens_ids.append(p)
             total_prompt_len = total_prompt_len + len(p)
 
@@ -84,6 +83,8 @@ class LLaMA(__TextGenerator__):
         batch_ids = []
         current_step = []
         tokens_lens = []
+        first_seqlen = []
+        step = 0
         while True:
             # if len(unprocessed_prompt_tokens_ids) > 0:
             while len(unprocessed_prompt_tokens_ids) > 0:
@@ -100,7 +101,7 @@ class LLaMA(__TextGenerator__):
                 processed_batches += 1
                 current_batches += 1
                 current_step.append(0)
-
+                first_seqlen.append(l)
             kvlens = [a + b for (a, b) in zip(start_pos, seqlens)]
             max_seqlen = torch.tensor([max(seqlens)])
             max_kvlen = torch.tensor([max(kvlens)])
@@ -113,6 +114,7 @@ class LLaMA(__TextGenerator__):
             _kvstarts[1:] = torch.tensor(kvlens)
             _seqstarts = _seqstarts.cumsum(0)
             _kvstarts = _kvstarts.cumsum(0)
+            _first_seqlen = torch.tensor(first_seqlen, dtype=torch.int64).cuda()
 
             if self.model.params.cache_mode == 0:
                 _cachestarts = torch.tensor(cachestarts, dtype=torch.int64).cuda()
@@ -127,21 +129,21 @@ class LLaMA(__TextGenerator__):
             _seqstarts = _seqstarts.cuda()
             _kvstarts = _kvstarts.cuda()
 
-            attn_mask = torch.empty(0, dtype=torch.float16)
-            if self.model.params.auto_causal == False and decoding_batches < current_batches:
+            attn_mask = None
+            if decoding_batches < current_batches:   # 存在prefill阶段的batch
                 attn_mask = torch.zeros((_seqstarts[-1], _kvstarts[-1]), dtype=torch.float16).cuda()
                 for b in range(decoding_batches, current_batches):
                     seqbeg = _seqstarts[b]
                     seqend = _seqstarts[b+1]
                     kvbeg = _kvstarts[b]
                     kvend = _kvstarts[b+1]
-                    attn_mask[seqbeg:seqend, kvbeg:kvend] = \
-                        torch.triu(torch.full_like(attn_mask[seqbeg:seqend, kvbeg:kvend], float("-inf")), diagonal=1)
 
+                    attn_mask[seqbeg:seqend, kvbeg:kvend][:, -1] = float("-inf")
+                    attn_mask[seqbeg:seqend, kvbeg:kvend][-1, -1] = 0.0
             logits = self.model.forward(_tokens_ids, attn_mask, _seqstarts, _kvstarts,
                                         _cachestarts, decoding_batches,
                                         _start_pos, max_seqlen, max_kvlen,
-                                        kv_cache, kv_scale)
+                                        _first_seqlen, kv_cache, kv_scale)
             TensorDumper.step += 1
             start_pos = [a + b for (a, b) in zip(start_pos, seqlens)]
             seqlens = [1 for _ in seqlens]
@@ -191,7 +193,6 @@ class LLaMA(__TextGenerator__):
             response_ids.append(t)
         return response_ids
 
-
     def export(
         self,
         export_path: str,
@@ -203,7 +204,7 @@ class LLaMA(__TextGenerator__):
         head_dim = self.model.params.hidden_dim // self.model.params.num_heads
         num_local_kv_heads = self.model.params.num_kv_heads // torch.distributed.get_world_size(group=self.model.proc_group)
         num_layers = self.model.params.num_layers
-
+        
         if self.model.params.cache_layout == 0:
             cache_prefix_shape = (total_cache_len, num_layers, 2, num_local_kv_heads)
             max_tokenlen_idx = 0
@@ -218,7 +219,7 @@ class LLaMA(__TextGenerator__):
             max_tokenlen_idx = 3
         else:
             raise Exception("unsupported cache_layout: {}".format(self.model.params.cache_layout))
-
+        
         if self.model.params.cache_quant_bit == 8:
             scale_head_dim = head_dim // self.model.params.cache_quant_group
             kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.int8)
@@ -226,7 +227,7 @@ class LLaMA(__TextGenerator__):
         else:
             kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.float16)
             kv_scale = None
-
+            
         seqlen = total_len // 2
         token_ids = torch.ones(bsz * seqlen, dtype=torch.int64)
         start_pos = torch.zeros(bsz, dtype=torch.int64)
@@ -234,8 +235,9 @@ class LLaMA(__TextGenerator__):
         kvstarts = torch.arange(0, seqlen * (bsz + 1), seqlen, dtype=torch.int64)
         decoding_batches = torch.tensor([0], dtype=torch.int64)
         max_seqlen = torch.tensor([seqlen])
-        attn_mask = torch.empty(0, dtype=torch.float16)
-
+        attn_mask = torch.zeros((seqstarts[-1], kvstarts[-1]), dtype=torch.float16).cuda()
+        first_seqlen = torch.tensor([seqlen for _ in range(bsz)], dtype=torch.int64)
+        
         if self.model.params.cache_mode == 0:
             cachestarts = torch.arange(0, total_len * bsz, total_len, dtype=torch.int64)
             cachestarts_dim_name = 'batch'
@@ -244,28 +246,31 @@ class LLaMA(__TextGenerator__):
             cachestarts_dim_name = 'total_kvlen'
         else:
             raise Exception("unsupported cache_mode: {}".format(self.model.params.cache_mode))
-
+        
         input_names = ["token_ids", "attn_mask", "seqstarts", "kvstarts",
                        "cachestarts", "decoding_batches",
-                       "start_pos", "max_seqlen", "max_kvlen",
+                       "start_pos", "max_seqlen", "max_kvlen", "first_seqlen",
                        "kv_cache", "kv_scale"]
         output_names = ["logits"]
-
+        
         dynamic_axes = {
             'token_ids': {
-                0:'total_seqlen'
+                0: 'total_seqlen'
             },
             'seqstarts': {
-                0:'batch + 1'
+                0: 'batch + 1'
             },
             'kvstarts': {
-                0:'batch + 1'
+                0: 'batch + 1'
             },
             'cachestarts': {
-                0:cachestarts_dim_name
+                0: cachestarts_dim_name
             },
             'start_pos': {
-                0:'batch'
+                0: 'batch'
+            },
+            'first_seqlen': {
+                0: 'batch'
             },
             'kv_cache': {
                 max_tokenlen_idx: 'max_tokenlen'
@@ -278,7 +283,7 @@ class LLaMA(__TextGenerator__):
                 1: 'vocab_size'
             },
         }
-
+        
         if self.model.params.cache_quant_bit == 0:
             dynamic_axes.pop('kv_scale')
             input_names.pop()
@@ -288,14 +293,14 @@ class LLaMA(__TextGenerator__):
 
         if not os.path.exists(model_path):
             os.makedirs(model_path)
-
+            
         torch.onnx.export(
             self.model.cpu(),
             (token_ids, attn_mask, 
-             seqstarts, kvstarts,
+             seqstarts, seqstarts,
              cachestarts, decoding_batches,
              start_pos, max_seqlen, max_seqlen,
-             kv_cache, kv_scale),
+             first_seqlen, kv_cache, kv_scale),
             os.path.join(model_path, "model.onnx"),
             input_names=input_names,
             output_names=output_names,

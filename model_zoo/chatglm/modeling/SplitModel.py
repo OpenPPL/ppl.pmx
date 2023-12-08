@@ -9,7 +9,6 @@ import torch
 
 from pathlib import Path
 
-
 def read_json(path):
     with open(path, "r") as f:
         return json.load(f)
@@ -40,28 +39,40 @@ def split_pmx_model(model_path, input_base_path, num_shards):
         state_dict.update(torch.load(ckpt_path, map_location='cpu'))
 
     for layer_i in range(params['num_layers']):
-        wq = state_dict[f"layers.{layer_i}.attention.wq.weight"].reshape(n_heads_per_shard*num_shards, dims_per_head, hidden_dim).split([n_heads_per_shard]*num_shards, dim=0)
-        wq = [w.reshape(-1, hidden_dim) for w in wq]
-
+        wq = state_dict[f"layers.{layer_i}.attention.wq.weight"].reshape(n_heads_per_shard*num_shards, dims_per_head, hidden_dim).split([n_heads_per_shard]*num_shards, dim=0)  # [40, 128, 5120]
+        wq = [w.reshape(-1, hidden_dim) for w in wq]    # each for [2560, 1280]
+        wq_bias = state_dict[f"layers.{layer_i}.attention.wq.bias"].split([hidden_dim // num_shards]*num_shards)
+        
         wk = state_dict[f"layers.{layer_i}.attention.wk.weight"].reshape(num_local_key_value_heads*num_shards, dims_per_head, hidden_dim).split([num_local_key_value_heads]*num_shards, dim=0)
         wk = [w.reshape(-1, hidden_dim) for w in wk]
+        wk_bias = state_dict[f"layers.{layer_i}.attention.wk.bias"].split([hidden_dim // num_shards]*num_shards)
 
         wv = state_dict[f"layers.{layer_i}.attention.wv.weight"].reshape(num_local_key_value_heads*num_shards, dims_per_head, hidden_dim).split([num_local_key_value_heads]*num_shards, dim=0)
         wv = [w.reshape(-1, hidden_dim) for w in wv]
+        wv_bias = state_dict[f"layers.{layer_i}.attention.wv.bias"].split([hidden_dim // num_shards]*num_shards)
 
         wo = state_dict[f"layers.{layer_i}.attention.wo.weight"].split([hidden_dim // num_shards]*num_shards, dim=1)
+        wo_bias = state_dict[f"layers.{layer_i}.attention.wo.bias"]
+
         ff_w1 = state_dict[f"layers.{layer_i}.feed_forward.w1.weight"].split([intermediate_dim // num_shards]*num_shards, dim=0)
+        ff_w1_bias = state_dict[f"layers.{layer_i}.feed_forward.w1.bias"].split([intermediate_dim // num_shards]*num_shards)
+        
         ff_w2 = state_dict[f"layers.{layer_i}.feed_forward.w2.weight"].split([intermediate_dim // num_shards]*num_shards, dim=1)
-        ff_w3 = state_dict[f"layers.{layer_i}.feed_forward.w3.weight"].split([intermediate_dim // num_shards]*num_shards, dim=0)
+        ff_w2_bias = state_dict[f"layers.{layer_i}.feed_forward.w2.bias"]
 
         state_dict.update({
             f"layers.{layer_i}.attention.wq.weight": wq,
             f"layers.{layer_i}.attention.wk.weight": wk,
             f"layers.{layer_i}.attention.wv.weight": wv,
             f"layers.{layer_i}.attention.wo.weight": wo,
+            f"layers.{layer_i}.attention.wq.bias": wq_bias,
+            f"layers.{layer_i}.attention.wk.bias": wk_bias,
+            f"layers.{layer_i}.attention.wv.bias": wv_bias,
+            f"layers.{layer_i}.attention.wo.bias": wo_bias,
             f"layers.{layer_i}.feed_forward.w1.weight": ff_w1,
             f"layers.{layer_i}.feed_forward.w2.weight": ff_w2,
-            f"layers.{layer_i}.feed_forward.w3.weight": ff_w3,
+            f"layers.{layer_i}.feed_forward.w1.bias": ff_w1_bias,
+            f"layers.{layer_i}.feed_forward.w2.bias": ff_w2_bias,
         })
 
     token_emb_weight = state_dict["tok_embeddings.weight"].split([hidden_dim // num_shards]*num_shards, dim=1)
@@ -70,14 +81,6 @@ def split_pmx_model(model_path, input_base_path, num_shards):
         "tok_embeddings.weight": token_emb_weight,
         "output.weight": output_weight
     })
-
-    # only split RowParallelLinear bias
-    for key in state_dict.keys():
-        if 'wo.bias' in key: continue
-        if 'bias' in key:
-            bias_dim = state_dict[key].shape[0]
-            split_bias = state_dict[key].split([bias_dim // num_shards]*num_shards)
-            state_dict.update({key: split_bias})
 
     # dump weight
     tmp_weight_list = [{} for _ in range(num_shards)]
