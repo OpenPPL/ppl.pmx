@@ -40,7 +40,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 is_causal: bool = True, num_kv_heads: int = 0):
         if torch.onnx.is_in_onnx_export():
             return query
-        
+
         if attn_mask is not None and attn_mask.numel() > 0:
             assert 2 == attn_mask.dim() or 3 == attn_mask.dim(), "attn_mask.dim is {}".format(attn_mask.dim())
             assert kvstarts[-1] == attn_mask.shape[-1], "{} vs. {}".format(kvstarts[-1], attn_mask.shape[-1])
@@ -83,7 +83,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 scores = scores + causal_mask
             if attn_mask is not None and attn_mask.numel() > 0:
                 # scores (num_heads, seqlen, kvlen)
-                scores = scores + attn_mask[..., seqbeg:seqend, kvbeg:kvend]
+                scores = scores + attn_mask[..., seqbeg:seqend, kvbeg:kvend].to(scores.device)
             scores = torch.nn.functional.softmax(scores.float(), dim=-1).type_as(_query)
             output[seqbeg:seqend] = torch.matmul(scores, _value).transpose(0, 1).contiguous()
 
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     test_op1 = TestModule1(num_heads, head_dim, True)
 
     test_op1.forward(q, k, v, seqstarts, seqstarts, decoding_batches, max_seqlen, max_seqlen, attn_mask)
-    
+
     model_str1 = torch.onnx.export_to_pretty_string(
        test_op1, (q, k, v, seqstarts, seqstarts, decoding_batches, max_seqlen, max_seqlen), "MultiHeadAttention1.onnx",
        input_names=["query", "key", "value", "seqstarts", "kvstarts", "decoding_batches", "max_seqlen", "max_kvlen"],
