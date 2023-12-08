@@ -28,12 +28,11 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
     intermediate_dim = params['intermediate_dim']
     n_heads_per_shard = params['num_heads'] // num_shards
 
-    num_kv_heads = params['num_kv_heads'] if 'num_kv_heads' in params else params['num_heads']
-    num_kv_heads_per_shard = num_kv_heads // num_shards
-
+    # TO DO: GQA / MQA, only test on llama
+    num_local_key_value_heads = n_heads_per_shard
+    key_value_dim = hidden_dim
+    num_key_value_heads = params['num_kv_heads'] if 'num_kv_heads' in params else params['num_heads']
     dims_per_head = hidden_dim // params['num_heads']
-    key_value_dim = dims_per_head * num_kv_heads
-    
     write_json(params, os.path.join(model_path, "pmx_params.json"))
 
     loaded = [
@@ -55,7 +54,7 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
         merge_wk = torch.cat(
                     [
                         loaded[i][f"layers.{layer_i}.attention.wk.weight"].view(
-                            num_kv_heads_per_shard, dims_per_head, hidden_dim
+                            num_local_key_value_heads, dims_per_head, hidden_dim
                         )
                         for i in range(num_shards)
                     ],
@@ -65,7 +64,7 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
         merge_wv = torch.cat(
                 [
                     loaded[i][f"layers.{layer_i}.attention.wv.weight"].view(
-                        num_kv_heads_per_shard, dims_per_head, hidden_dim
+                        num_local_key_value_heads, dims_per_head, hidden_dim
                     )
                     for i in range(num_shards)
                 ],
@@ -91,11 +90,6 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
     })
     torch.save(state_dict, os.path.join(model_path, "model.pth"))
 
-    # only merge splited Colparallel bias
-    for key in loaded[0].keys():
-        if 'wo.bias' in key or 'w2.bias' in key: continue
-        if 'bias' in key:
-            state_dict.update({key: torch.cat([loaded[i][key] for i in range(num_shards)])})
 
 def main():
     parser = argparse.ArgumentParser()

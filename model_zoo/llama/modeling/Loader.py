@@ -26,11 +26,9 @@ def load(
     cache_layout: int, # change kv cache layout for hardware performance friendly
     cache_mode: int, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
     dynamic_batching: bool, # use dynamic batching scheduling
-    attn_wqkv_bias_term: bool,
-    attn_wo_bias_term: bool,
+    attn_linear_bias_term: bool,
     ffn_linear_bias_term: bool,
     load_to_cpu: bool,
-    rotary_dim: int = 0,
     dump_tensor_path: str = None,
     dump_steps: List[int] = []
 ) -> __TextGenerator__:
@@ -82,10 +80,8 @@ def load(
                         friendly_gqa,
                         fused_qkv,
                         fused_kvcache,
-                        attn_wqkv_bias_term,
-                        attn_wo_bias_term,
+                        attn_linear_bias_term,
                         ffn_linear_bias_term,
-                        rotary_dim=rotary_dim,
                         proc_group=proc_group)
     torch.set_default_tensor_type(torch.FloatTensor)
 

@@ -91,7 +91,7 @@ class Attention(nn.Module):
                 seqstarts: torch.Tensor, kvstarts: torch.Tensor, cachestarts: torch.Tensor,
                 decoding_batches: torch.Tensor, start_pos: torch.Tensor,
                 max_seqlen: torch.Tensor, max_kvlen: torch.Tensor,
-                first_seqlen: torch.Tensor,
+                first_seq_len: torch.Tensor,
                 kv_cache: torch.Tensor, kv_scale: torch.Tensor):
         expanded_shape = (0, -1, self.head_dim)
         if self.fused_qkv:
@@ -110,7 +110,7 @@ class Attention(nn.Module):
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
         
-        xq, xk = PMX.dynamic_batching.rotary_2d_position_embedding(xq, xk, seqstarts, start_pos, max_seqlen, first_seqlen) # (seqstarts[batch], num\\_heads, head\\_dim)
+        xq, xk = PMX.dynamic_batching.rotary_2d_position_embedding(xq, xk, seqstarts, start_pos, max_seqlen, first_seq_len) # (seqstarts[batch], num\\_heads, head\\_dim)
         # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
@@ -188,7 +188,7 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         x1 = self.w1(x)
-        x1 = PMX.gelu(x1, approximate=True)
+        x1 = PMX.gelu(x1)
         # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
         output = self.w2(x1)
         # TensorDumper.dump(output, "layer{}_ffn_w2".format(self.layer_id))
@@ -225,20 +225,20 @@ class GLMBlock(nn.Module):
     def forward(self, x: torch.Tensor, skip: torch.Tensor, attn_mask: Optional[torch.Tensor],
                 seqstarts: torch.Tensor, kvstarts: torch.Tensor, cachestarts: torch.Tensor,
                 decoding_batches: torch.Tensor, start_pos: torch.Tensor,
-                max_seqlen: torch.Tensor, max_kvlen: torch.Tensor, first_seqlen: torch.Tensor,
+                max_seqlen: torch.Tensor, max_kvlen: torch.Tensor, first_seq_len: torch.Tensor,
                 kv_cache: torch.Tensor, kv_scale: torch.Tensor):
-        attn_norm_out, _ = self.attention_norm.forward(x, skip * self.alpha if skip is not None else None)
-        # TensorDumper.dump(attn_norm_out, "layer{}_attention_norm_out".format(self.layer_id))
-        attn_out = self.attention.forward(attn_norm_out, attn_mask, seqstarts, kvstarts,
+        attn_input, _ = self.attention_norm.forward(x, skip * self.alpha if skip is not None else None)
+        # TensorDumper.dump(attn_input, "layer{}_attn_input".format(self.layer_id))
+        attn_out = self.attention.forward(attn_input, attn_mask, seqstarts, kvstarts,
                                       cachestarts, decoding_batches,
                                       start_pos, max_seqlen, max_kvlen,
-                                      first_seqlen, kv_cache, kv_scale)
+                                      first_seq_len, kv_cache, kv_scale)
 
-        ffn_norm_out, _ = self.ffn_norm.forward(attn_out, attn_norm_out * self.alpha)
-        # TensorDumper.dump(ffn_norm_out, "layer{}_ffn_norm_out".format(self.layer_id))
+        ffn_input, _ = self.ffn_norm.forward(attn_out, attn_input * self.alpha)
+        # TensorDumper.dump(ffn_input, "layer{}_ffn_input".format(self.layer_id))
         
-        ffn_out = self.feed_forward.forward(ffn_norm_out)
-        return ffn_out, ffn_norm_out
+        ffn_out = self.feed_forward.forward(ffn_input)
+        return ffn_out, ffn_input
 
 
 class Transformer(nn.Module):
@@ -288,7 +288,7 @@ class Transformer(nn.Module):
                 seqstarts: torch.Tensor, kvstarts: torch.Tensor,
                 cachestarts: torch.Tensor, decoding_batches: torch.Tensor,
                 start_pos: torch.Tensor, max_seqlen: torch.Tensor,  max_kvlen: torch.Tensor,
-                first_seqlen: torch.Tensor, kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
+                first_seq_len: torch.Tensor, kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
         h = self.tok_embeddings(tokens) # (seqlen, hidden_size)
         _kv_scale = kv_scale
         # TensorDumper.dump(tokens, "token_ids")
@@ -305,7 +305,6 @@ class Transformer(nn.Module):
         # TensorDumper.dump(start_pos, "start_pos")
         # TensorDumper.dump(max_seqlen, "max_seqlen")
         # TensorDumper.dump(max_kvlen, "max_kvlen")
-        # TensorDumper.dump(first_seqlen, "first_seqlen")
         # TensorDumper.dump(kv_cache, "kv_cache")
         # if kv_scale is not None:
         #     TensorDumper.dump(kv_scale, "kv_scale")
@@ -314,7 +313,7 @@ class Transformer(nn.Module):
         for layer in self.layers:
             h, norm = layer.forward(h, norm, attn_mask, seqstarts, kvstarts, cachestarts,
                             decoding_batches, start_pos, max_seqlen, max_kvlen,
-                            first_seqlen, kv_cache, _kv_scale)
+                            first_seq_len, kv_cache, _kv_scale)
 
         h, _ = self.norm(h, norm * self.alpha)
         # TensorDumper.dump(h, "last_rms_norm")

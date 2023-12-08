@@ -66,7 +66,6 @@ def load(
     model_params.dynamic_batching = bool(dynamic_batching)
     model_params.cache_layout = cache_layout
     model_params.cache_mode = cache_mode
-    model_params.auto_causal = False
     if quantized_cache:
         model_params.cache_quant_bit = 8
         model_params.cache_quant_group = 8
