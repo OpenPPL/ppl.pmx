@@ -79,17 +79,33 @@ def write_pmx_model(model_path, input_base_path):
              
         wqkv = wqkv.reshape(n_heads, 3, hidden_dim // n_heads, hidden_dim).transpose(0, 1).reshape(3 * hidden_dim, hidden_dim)
         wq, wk, wv = wqkv.chunk(3, dim=0)   # [(num_heads,3,head_dim), hidden_dim] --> [hidden_dim, hidden_dim]
-        
-        wq = wq.view(n_heads, 2, hidden_dim // n_heads // 2, hidden_dim).transpose(1, 2).reshape(hidden_dim, hidden_dim)
-        wk = wk.view(num_kv_heads, 2, key_value_dim // num_kv_heads // 2, hidden_dim).transpose(1, 2).reshape(key_value_dim, hidden_dim)
+
+        # 先对半切，再分别转置
+        wq0, wq1 = wq.chunk(2, dim=0)
+        wq0 = wq0.reshape(n_heads, 2, hidden_dim // n_heads // 4, hidden_dim).transpose(1,2).reshape(hidden_dim // 2, hidden_dim)
+        wq1 = wq1.reshape(n_heads, 2, hidden_dim // n_heads // 4, hidden_dim).transpose(1,2).reshape(hidden_dim // 2, hidden_dim)
+        wq = torch.cat((wq0, wq1), dim=0)
+
+        wk0, wk1 = wk.chunk(2, dim=0)
+        wk0 = wk0.reshape(num_kv_heads, 2, key_value_dim // num_kv_heads // 4, hidden_dim).transpose(1,2).reshape(key_value_dim // 2, hidden_dim)
+        wk1 = wk1.reshape(num_kv_heads, 2, key_value_dim // num_kv_heads // 4, hidden_dim).transpose(1,2).reshape(key_value_dim // 2, hidden_dim)
+        wk = torch.cat((wk0, wk1), dim=0)
+
         return wq, wk, wv
 
     def unpermute_bias(wqkv_bias, n_heads, num_kv_heads, hidden_dim, key_value_dim):
         wqkv_bias = wqkv_bias.reshape(n_heads, 3, hidden_dim // n_heads).transpose(0, 1).reshape(3 * hidden_dim)
         wq_bias, wk_bias, wv_bias = wqkv_bias.chunk(3)
-        
-        wq_bias = wq_bias.view(n_heads, 2, hidden_dim // n_heads // 2).transpose(1, 2).reshape(hidden_dim)
-        wk_bias = wk_bias.view(num_kv_heads, 2, key_value_dim // num_kv_heads // 2).transpose(1, 2).reshape(key_value_dim)
+
+        wq_bias_0, wq_bias_1 = wq_bias.chunk(2)
+        wq_bias_0 = wq_bias_0.view(n_heads, 2, hidden_dim // n_heads // 4).transpose(1, 2).reshape(hidden_dim // 2)
+        wq_bias_1 = wq_bias_1.view(n_heads, 2, hidden_dim // n_heads // 4).transpose(1, 2).reshape(hidden_dim // 2)
+        wq_bias = torch.cat((wq_bias_0, wq_bias_1))
+
+        wk_bias_0, wk_bias_1 = wk_bias.chunk(2)
+        wk_bias_0 = wk_bias_0.view(num_kv_heads, 2, key_value_dim // num_kv_heads // 4).transpose(1, 2).reshape(key_value_dim // 2)
+        wk_bias_1 = wk_bias_1.view(num_kv_heads, 2, key_value_dim // num_kv_heads // 4).transpose(1, 2).reshape(key_value_dim // 2)
+        wk_bias = torch.cat((wk_bias_0, wk_bias_1))
         
         return wq_bias, wk_bias, wv_bias
 
@@ -123,13 +139,13 @@ def write_pmx_model(model_path, input_base_path):
             f"layers.{layer_i}.ffn_norm.bias": hf_model_state_dict[f"transformer.layers.{layer_i}.post_attention_layernorm.bias"],
         })
 
-        state_dict.update({
-            "tok_embeddings.weight": hf_model_state_dict["transformer.word_embeddings.weight"],
-            "norm.weight": hf_model_state_dict["transformer.final_layernorm.weight"],
-            "norm.bias": hf_model_state_dict["transformer.final_layernorm.bias"],
-            "output.weight": hf_model_state_dict["lm_head.weight"]
-        })
-        torch.save(state_dict, os.path.join(model_path, "model.pth"))
+    state_dict.update({
+        "tok_embeddings.weight": hf_model_state_dict["transformer.word_embeddings.weight"],
+        "norm.weight": hf_model_state_dict["transformer.final_layernorm.weight"],
+        "norm.bias": hf_model_state_dict["transformer.final_layernorm.bias"],
+        "output.weight": hf_model_state_dict["lm_head.weight"]
+    })
+    torch.save(state_dict, os.path.join(model_path, "model.pth"))
 
 def main():
     parser = argparse.ArgumentParser()

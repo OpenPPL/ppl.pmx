@@ -44,7 +44,9 @@ class Attention(nn.Module):
             friendly_gqa: bool,
             fused_qkv: bool,
             fused_kvcache: bool,
-            linear_bias_term: bool,
+            attn_wqkv_bias_term: bool,
+            attn_wo_bias_term: bool,
+            rotary_dim: int,
             proc_group: dist.ProcessGroup):
         super().__init__()
 
@@ -55,6 +57,7 @@ class Attention(nn.Module):
         self.num_local_kv_heads = self.num_kv_heads // world_size
         self.num_local_kv_repeats = self.num_local_heads // self.num_local_kv_heads
         self.head_dim = args.hidden_dim // args.num_heads
+        self.rotary_dim = rotary_dim
         self.num_layers = args.num_layers
         self.layer_id = layer_id
         self.cache_quant_bit = args.cache_quant_bit
@@ -70,20 +73,20 @@ class Attention(nn.Module):
         if self.fused_qkv:
             self.wqkv = ColumnParallelLinear(
                 proc_group, args.hidden_dim, args.hidden_dim + 2 * self.num_kv_heads * self.head_dim,
-                bias_term=linear_bias_term, gather_output=False)
+                bias_term=attn_wqkv_bias_term, gather_output=False)
         else:
             self.wq = ColumnParallelLinear(
                 proc_group, args.hidden_dim, args.hidden_dim,
-                bias_term=linear_bias_term, gather_output=False)
+                bias_term=attn_wqkv_bias_term, gather_output=False)
             self.wk = ColumnParallelLinear(
                 proc_group, args.hidden_dim, self.num_kv_heads * self.head_dim,
-                bias_term=linear_bias_term, gather_output=False)
+                bias_term=attn_wqkv_bias_term, gather_output=False)
             self.wv = ColumnParallelLinear(
                 proc_group, args.hidden_dim, self.num_kv_heads * self.head_dim,
-                bias_term=linear_bias_term, gather_output=False)
+                bias_term=attn_wqkv_bias_term, gather_output=False)
         self.wo = RowParallelLinear(
             proc_group, args.hidden_dim, args.hidden_dim,
-            bias_term=linear_bias_term, input_is_parallel=True)
+            bias_term=attn_wo_bias_term, input_is_parallel=True)
 
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor],
@@ -107,9 +110,11 @@ class Attention(nn.Module):
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
+
         xq, xk = PMX.dynamic_batching.rotary_position_embedding(
                                         xq, xk, seqstarts,
-                                        start_pos, max_seqlen)
+                                        start_pos, max_seqlen, 
+                                        self.rotary_dim)
         # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
@@ -158,9 +163,10 @@ class Attention(nn.Module):
                                             head_dim=self.head_dim,
                                             is_causal=self.auto_causal,
                                             num_kv_heads=0 if self.friendly_gqa else self.num_local_kv_heads)
+        attn = PMX.reshape(attn, (0, -1))
         # TensorDumper.dump(attn, "layer{}_multi_head_attention_out".format(self.layer_id))
 
-        output = self.wo(PMX.reshape(attn, (0, -1)))
+        output = self.wo(attn)
         # TensorDumper.dump(output, "layer{}_reshaped_wo_out".format(self.layer_id))
 
         return output
@@ -206,8 +212,10 @@ class TransformerBlock(nn.Module):
                  friendly_gqa: bool,
                  fused_qkv: bool,
                  fused_kvcache: bool,
-                 attn_linear_bias_term: bool,
+                 attn_wqkv_bias_term: bool,
+                 attn_wo_bias_term: bool,
                  ffn_linear_bias_term: bool,
+                 rotary_dim: int, 
                  proc_group: dist.ProcessGroup):
         super().__init__()
         self.attention = Attention(args,
@@ -215,7 +223,9 @@ class TransformerBlock(nn.Module):
                                    friendly_gqa,
                                    fused_qkv,
                                    fused_kvcache,
-                                   attn_linear_bias_term,
+                                   attn_wqkv_bias_term,
+                                   attn_wo_bias_term,
+                                   rotary_dim=rotary_dim,
                                    proc_group=proc_group)
         self.feed_forward = FeedForward(args, 
                                         layer_id,
@@ -251,8 +261,10 @@ class Transformer(nn.Module):
                  friendly_gqa: bool,
                  fused_qkv: bool,
                  fused_kvcache: bool,
-                 attn_linear_bias_term: bool,
+                 attn_wqkv_bias_term: bool,
+                 attn_wo_bias_term: bool,
                  ffn_linear_bias_term: bool,
+                 rotary_dim: int,
                  proc_group: dist.ProcessGroup):
         super().__init__()
         self.params = params
@@ -279,8 +291,10 @@ class Transformer(nn.Module):
                 friendly_gqa,
                 fused_qkv,
                 fused_kvcache,
-                attn_linear_bias_term,
+                attn_wqkv_bias_term,
+                attn_wo_bias_term,
                 ffn_linear_bias_term,
+                rotary_dim,
                 proc_group=proc_group))
 
         self.norm = SkipRMSNorm(params.hidden_dim, eps=params.norm_eps)
@@ -297,22 +311,22 @@ class Transformer(nn.Module):
         # TensorDumper.dump(h, "emb_out")
 
         _kv_scale = kv_scale
-        TensorDumper.dump(tokens, "token_ids")
-        if attn_mask is not None:
-            TensorDumper.dump(attn_mask, "attn_mask")
+        # TensorDumper.dump(tokens, "token_ids")
+        # if attn_mask is not None:
+        #     TensorDumper.dump(attn_mask, "attn_mask")
         if self.fused_kvcache and attn_mask is not None:
             if kv_scale is None: # mount an empty scale for friendly exporting
                 _kv_scale = torch.empty(0, dtype=h.dtype)
-        TensorDumper.dump(seqstarts, "seqstarts")
-        TensorDumper.dump(kvstarts, "kvstarts")
-        TensorDumper.dump(cachestarts, "cachestarts")
-        TensorDumper.dump(decoding_batches, "decoding_batches")
-        TensorDumper.dump(start_pos, "start_pos")
-        TensorDumper.dump(max_seqlen, "max_seqlen")
-        TensorDumper.dump(max_kvlen, "max_kvlen")
-        TensorDumper.dump(kv_cache, "kv_cache")
-        if kv_scale is not None:
-            TensorDumper.dump(kv_scale, "kv_scale")
+        # TensorDumper.dump(seqstarts, "seqstarts")
+        # TensorDumper.dump(kvstarts, "kvstarts")
+        # TensorDumper.dump(cachestarts, "cachestarts")
+        # TensorDumper.dump(decoding_batches, "decoding_batches")
+        # TensorDumper.dump(start_pos, "start_pos")
+        # TensorDumper.dump(max_seqlen, "max_seqlen")
+        # TensorDumper.dump(max_kvlen, "max_kvlen")
+        # TensorDumper.dump(kv_cache, "kv_cache")
+        # if kv_scale is not None:
+        #     TensorDumper.dump(kv_scale, "kv_scale")
 
         norm = None
         for layer in self.layers:
@@ -327,7 +341,7 @@ class Transformer(nn.Module):
         output = self.output(gathered_h)  # only compute last logits
         # TensorDumper.dump(output, "logits_before_cast")
         output = output.float()
-        TensorDumper.dump(output, "logits")
+        # TensorDumper.dump(output, "logits")
         return output
     
 
