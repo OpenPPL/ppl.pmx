@@ -2,7 +2,34 @@
 # dynamic_batching.ALiBi
 
 The original definition of `ALiBi` refers to [here](../ALiBi.md).
-`dynamic_batching.ALiBi`, uses seqstarts and kvstarts to record the sequence begining position of each batch. 
+`dynamic_batching.ALiBi`, uses seqstarts and kvstarts to record the sequence begining position of each batch. The mask is similar to a block diagonal matrix. We generate the mask for each batch and fill it in the corresponding position. The following code shows the calculation process.
+
+```python
+alibi_mask = torch.zeros([seqstarts[-1], kvstarts[-1]], dtype=data_type)
+
+seqlens = seqstarts[1:] - seqstarts[:-1]
+kvlens = kvstarts[1:] - kvstarts[:-1]
+for batch_idx, seqlen in enumerate(seqlens):
+    kvlen = kvlens[batch_idx]
+    # each batch mask index
+    seqbeg = seqstarts[batch_idx]
+    seqend = seqstarts[batch_idx+1]
+    kvbeg = kvstarts[batch_idx]
+    kvend = kvstarts[batch_idx+1]
+
+    tmp_alibi_mask = _fill_with_neg_inf(torch.zeros([seqlen, kvlen], dtype=data_type))
+    # generate masks for each batch, the process is the same as static batch alibi
+    for i in range(xx):
+        for j in range(xx):
+            ...
+
+    alibi_mask[seqbeg:seqend, kvbeg:kvend] = tmp_alibi_mask
+
+alibi_mask = alibi_mask.unsqueeze(0).expand(num_heads, -1, -1)
+# alibi_mask shape -> (num_heads, sum(seqlens), sum(kvlens))
+# slopes_m shape -> (num_heads, 1, 1)
+alibi_mask = slopes_m * alibi_mask
+```
 ## Attributes/Parameters
 
 ### `num_heads`: int
