@@ -12,13 +12,13 @@ class ALiBi(torch.autograd.Function):
                  attention_mask: Optional[torch.Value], num_heads: int, data_type: torch.dtype):
         data_type_onnx = torch2onnx_dtype[data_type]
         if attention_mask is not None:
-            alibi_mask = g.op('pmx::ALiBi',
+            alibi_mask = g.op('pmx.dynamic_batching::ALiBi',
                           seqstarts, kvstarts,
                           attention_mask,
                           num_heads_i = num_heads,
                           data_type_i = data_type_onnx)
         else:
-            alibi_mask = g.op('pmx::ALiBi',
+            alibi_mask = g.op('pmx.dynamic_batching::ALiBi',
                           seqstarts, kvstarts,
                           num_heads_i = num_heads,
                           data_type_i = data_type_onnx)
@@ -31,20 +31,15 @@ class ALiBi(torch.autograd.Function):
         if torch.onnx.is_in_onnx_export():
             return torch.tensor([num_heads, seqstarts[-1], kvstarts[-1]], dtype=data_type)
 
-        def _get_interleave(n):
-            def _get_interleave_power_of_2(n):
-                start = 2 ** (-(2 ** -(math.log2(n) - 3)))
-                ratio = start
-                return [start * ratio**i for i in range(n)]
-
-            if math.log2(n).is_integer():
-                return _get_interleave_power_of_2(n)
-            else:
-                closest_power_of_2 = 2 ** math.floor(math.log2(n))
-                return (
-                    _get_interleave_power_of_2(closest_power_of_2)
-                    + _get_interleave(2 * closest_power_of_2)[0::2][: n - closest_power_of_2]
-                )
+        def _get_interleave(heads):
+            tmp = []
+            closest_power_of_2 = 2 ** math.floor(math.log2(heads))
+            for n in range(1, closest_power_of_2+1):
+                tmp.append(2**(-8 * n / closest_power_of_2))
+            if closest_power_of_2 < heads:
+                for n in range(1, 2*(heads-closest_power_of_2)+1, 2):
+                    tmp.append(2**(-4 * n / closest_power_of_2))
+            return tmp
 
         def _fill_with_neg_inf(t):
             """FP16-compatible function that fills a tensor with -inf."""
