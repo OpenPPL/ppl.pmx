@@ -47,7 +47,7 @@ def load(
         # if cache_mode:
         #     print("Warning: cache_mode only affected when dynamic_batching == True")
 
-    local_rank, world_size = ModelParallel.setup()
+    local_rank, world_size = ModelParallel.setup(load_to_cpu)
     if local_rank > 0:
         sys.stdout = open(os.devnull, "w")
 
@@ -61,7 +61,8 @@ def load(
     print("Loading")
     checkpoint = torch.load(ckpt_path, map_location="cpu")
 
-    proc_group = dist.new_group(ranks=[_ for _ in range(world_size)], backend='nccl')
+    proc_group = dist.new_group(ranks=[_ for _ in range(world_size)], backend=
+                                'gloo' if load_to_cpu else 'nccl')
 
     model_params.dynamic_batching = bool(dynamic_batching)
     model_params.cache_layout = cache_layout
