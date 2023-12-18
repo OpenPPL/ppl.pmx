@@ -10,12 +10,15 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/..")
 
 import torch_function as PMX
 
-def setup() -> Tuple[int, int]:
+def setup(use_cpu: bool = True) -> Tuple[int, int]:
     local_rank = int(os.environ.get("LOCAL_RANK", -1))
     world_size = int(os.environ.get("WORLD_SIZE", -1))
 
-    dist.init_process_group("nccl")
-    torch.cuda.set_device(local_rank)
+    if use_cpu:
+        dist.init_process_group("gloo")
+    else:
+        dist.init_process_group("nccl")
+        torch.cuda.set_device(local_rank)
 
     # seed must be the same in all processes
     torch.manual_seed(1)
