@@ -2,11 +2,13 @@
 
 | Domain: pmx |
 |  ----  |
+| [ALiBiMask](operators/ALiBiMask.md)  |
 | [ColumnParallelLinear](operators/ColumnParallelLinear.md)  |
 | [GELU](operators/GELU.md)  |
 | [KeyValueCache](operators/KeyValueCache.md)  |
 | [LayerNorm](operators/LayerNorm.md)  |
 | [MultiHeadAttention](operators/MultiHeadAttention.md)  |
+| [MultiHeadCacheAttention](operators/MultiHeadCacheAttention.md)  |
 | [ParallelEmbedding](operators/ParallelEmbedding.md)  |
 | [Reshape](operators/Reshape.md)  |
 | [RMSNorm](operators/RMSNorm.md)  |
@@ -14,6 +16,8 @@
 | [Rotary2DPositionEmbedding](operators/Rotary2DPositionEmbedding.md)  |
 | [RowParallelLinear](operators/RowParallelLinear.md)  |
 | [SiLU](operators/SiLU.md)  |
+| [dynamic_batching.ALiBiMask](operators/dynamic_batching/ALiBiMask.md)  |
 | [dynamic_batching.KeyValueCache](operators/dynamic_batching/KeyValueCache.md)  |
 | [dynamic_batching.MultiHeadAttention](operators/dynamic_batching/MultiHeadAttention.md)  |
+| [dynamic_batching.MultiHeadCacheAttention](operators/dynamic_batching/MultiHeadCacheAttention.md)  |
 | [dynamic_batching.RotaryPositionEmbedding](operators/dynamic_batching/RotaryPositionEmbedding.md)  |
