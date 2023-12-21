@@ -19,10 +19,11 @@ from .RMSNorm import skip_rms_norm
 
 from .RotaryPositionEmbedding import rotary_position_embedding
 from .Rotary2DPositionEmbedding import rotary_2d_position_embedding
-from .ALiBi import alibi_position_embedding
 
 from .RowParallelLinear import row_parallel_linear
 
 from .SiLU import silu
+
+from .ALiBiMask import alibi_mask
 
 from . import dynamic_batching

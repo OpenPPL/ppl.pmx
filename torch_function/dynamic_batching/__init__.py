@@ -6,4 +6,4 @@ from .MultiHeadCacheAttention import multi_head_cache_attention
 from .RotaryPositionEmbedding import rotary_position_embedding
 from .Rotary2DPositionEmbedding import rotary_2d_position_embedding
 
-from .ALiBi import alibi_position_embedding
+from .ALiBiMask import alibi_mask

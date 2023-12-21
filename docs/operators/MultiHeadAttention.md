@@ -53,9 +53,9 @@ Shape: $(batch, seqlen\\_kv, num\\_kv\\_heads, head\\_dim)$
 
 ### `attn_mask`(optional): tensor(T)
 
-Optional custom mask. If shape is $(seqlen\\_q, seqlen\\_kv)$, `attn_mask` will be broadcasted.
+Optional custom mask. If shape is not $(batch, num\\_heads, seqlen\\_q, seqlen\\_kv)$, `attn_mask` will be broadcasted.
 
-Shape: $(seqlen\\_q, seqlen\\_kv)$ or $(batch, num\\_heads, seqlen\\_q, seqlen\\_kv)$
+Shape: $(seqlen\\_q, seqlen\\_kv)$ or $(num\\_heads, seqlen\\_q, seqlen\\_kv)$ or $(batch, num\\_heads, seqlen\\_q, seqlen\\_kv)$
 
 ## Outputs
 
