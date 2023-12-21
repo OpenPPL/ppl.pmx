@@ -22,6 +22,12 @@ Estimated GELU with tanh approximate
 
 Shape: $(*)$
 
+### `gate`(optional): tensor(T)
+
+Shape: same as `X`
+
+If `gate` is presentes, output should become $Y=gate*GELU(X)$
+
 ## Outputs
 
 ### `Y`: tensor(T)
