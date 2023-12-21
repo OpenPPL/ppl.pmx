@@ -3,35 +3,43 @@ import torch
 import math
 from typing import Optional
 
+
 torch2onnx_dtype = {torch.float16: 10,
                     torch.float32: 1}
 
-class ALiBi(torch.autograd.Function):
+
+class ALiBiMask(torch.autograd.Function):
     @staticmethod
     def symbolic(g, seqlen_q: torch.Value, seqlen_kv: torch.Value,
                  attention_mask: Optional[torch.Value], num_heads: int, data_type: torch.dtype):
         data_type_onnx = torch2onnx_dtype[data_type]
         if attention_mask is not None:
-            alibi_mask = g.op('pmx::ALiBi',
+            alibi_mask = g.op('pmx::ALiBiMask',
                           seqlen_q, seqlen_kv,
                           attention_mask,
                           num_heads_i = num_heads,
                           data_type_i = data_type_onnx)
         else:
-            alibi_mask = g.op('pmx::ALiBi',
+            alibi_mask = g.op('pmx::ALiBiMask',
                           seqlen_q, seqlen_kv,
                           num_heads_i = num_heads,
                           data_type_i = data_type_onnx)
         return alibi_mask
 
+
     @staticmethod
     def forward(ctx, seqlen_q: torch.Tensor, seqlen_kv: torch.Tensor,
-                attention_mask: Optional[torch.Tensor], num_heads: int, data_type: torch.dtype):
+                attention_mask: Optional[torch.Tensor],
+                num_heads: int, data_type: torch.dtype):
 
         if torch.onnx.is_in_onnx_export():
-            return torch.tensor([1, num_heads, seqlen_q, seqlen_kv], dtype=data_type)
+            if attention_mask is not None and attention_mask.numel() > 0 and len(attention_mask.shape) == 4:
+                return torch.zeros(attention_mask.shape, dtype=data_type)
+            else:
+                return torch.zeros((num_heads, seqlen_q, seqlen_kv), dtype=data_type)
 
-        def _get_interleave(heads):
+
+        def get_slops(heads):
             tmp = []
             closest_power_of_2 = 2 ** math.floor(math.log2(heads))
             for n in range(1, closest_power_of_2+1):
@@ -41,13 +49,10 @@ class ALiBi(torch.autograd.Function):
                     tmp.append(2**(-4 * n / closest_power_of_2))
             return tmp
 
-        def _fill_with_neg_inf(t):
-            """FP16-compatible function that fills a tensor with -inf."""
-            return t.float().fill_(float("-inf")).type_as(t)
 
-        slopes = torch.tensor(_get_interleave(num_heads), dtype=data_type)
+        slopes = torch.tensor(get_slops(num_heads), dtype=data_type)
         seqlen_q, seqlen_kv = int(seqlen_q), int(seqlen_kv)
-        alibi_mask = _fill_with_neg_inf(torch.zeros([seqlen_q, seqlen_kv], dtype=data_type))
+        alibi_mask = torch.full((seqlen_q, seqlen_kv), float("-inf"), dtype=data_type)
 
         for i in range(seqlen_q-1, -1, -1):
             for j in range(seqlen_kv):
@@ -60,16 +65,21 @@ class ALiBi(torch.autograd.Function):
         alibi_mask = slopes.unsqueeze(1).unsqueeze(1) * alibi_mask
 
         if attention_mask is not None and attention_mask.numel() > 0:
-            assert len(attention_mask.shape) == 2
-            attention_mask =  attention_mask.unsqueeze(0).expand(num_heads, seqlen_q, seqlen_kv)
-            alibi_mask = alibi_mask.to(attention_mask) + attention_mask
-        alibi_mask = alibi_mask.unsqueeze(0)
+            assert len(attention_mask.shape) == 2 or len(attention_mask.shape) == 4
+            if len(attention_mask.shape) == 2:
+                attention_mask = attention_mask.unsqueeze(0).expand(num_heads, seqlen_q, seqlen_kv)
+                alibi_mask = alibi_mask.to(attention_mask) + attention_mask
+            if len(attention_mask.shape) == 4:
+                batch = attention_mask.shape[0]
+                alibi_mask = alibi_mask.unsqueeze(0).expand(batch, num_heads, seqlen_q, seqlen_kv)
+                alibi_mask = alibi_mask.to(attention_mask) + attention_mask
         return alibi_mask
 
 
-def alibi_position_embedding(seqlen_q: torch.Tensor, seqlen_kv: torch.Tensor,
-                             attention_mask: Optional[torch.Tensor], num_heads: int, data_type: torch.dtype):
-    return ALiBi.apply(seqlen_q, seqlen_kv, attention_mask, num_heads, data_type)
+def alibi_mask(seqlen_q: torch.Tensor, seqlen_kv: torch.Tensor,
+                attention_mask: Optional[torch.Tensor], num_heads: int, data_type: torch.dtype):
+    return ALiBiMask.apply(seqlen_q, seqlen_kv, attention_mask, num_heads, data_type)
+
 
 if __name__ == "__main__":
     class TestALiBiModule(torch.nn.Module):
@@ -78,9 +88,11 @@ if __name__ == "__main__":
             self.num_heads = num_heads
             self.data_type = data_type
 
+
         def forward(self, seqlen_q: torch.Tensor, seqlen_kv: torch.Tensor,
                     attention_mask: torch.Tensor = None):
-            return alibi_position_embedding(seqlen_q, seqlen_kv, attention_mask, self.num_heads, self.data_type)
+            return alibi_mask(seqlen_q, seqlen_kv, attention_mask, self.num_heads, self.data_type)
+
 
     num_heads = 40
     seqlen_q = torch.tensor(2)
@@ -103,5 +115,5 @@ if __name__ == "__main__":
         input_names=["seqlen_q", "seqlen_kv"],
         output_names=["attention_with_alibi"], opset_version=11)
 
-    print (model_str_1)
-    print (model_str_2)
+    print(model_str_1)
+    print(model_str_2)

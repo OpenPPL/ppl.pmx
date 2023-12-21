@@ -1,5 +1,5 @@
 
-# Attention with Linear Biases
+# ALiBiMask
 
 [Attention with Linear Biases ](https://ofir.io/train_short_test_long.pdf) (ALiBi)
 does not add positional embeddings
@@ -11,7 +11,7 @@ $$
 \{softmax}\left(\mathbf{q}_i \mathbf{K}^{\top}+m \cdot[-(i-1), \ldots,-2,-1,0]\right)
 $$
 
-![](ALiBi.jpeg)
+![ALiBi](ALiBi.jpeg)
 
 
 The figrue offers a visualization.
@@ -19,7 +19,7 @@ ALiBi adds a constant bias (right) to each attention score ($\mathbf{q}_i \cdot 
 The following code shows the calculation process.
 
 ```python
-alibi_mask = _fill_with_neg_inf(torch.zeros([seqlen_q, seqlen_kv], dtype=data_type))
+alibi_mask = torch.full((seqlen_q, seqlen_kv), float('inf'), dtype=data_type)
 for i in range(seqlen_q-1, -1, -1):
     for j in range(seqlen_kv):
         mask = j - seqlen_kv + 1 + (seqlen_q - 1 - i)
@@ -37,7 +37,7 @@ alibi_mask = slopes_m * alibi_mask
 
 Number of heads
 
-### `data_type`: str
+### `data_type`: int
 
 Data type of ALiBi mask
 

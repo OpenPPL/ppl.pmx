@@ -69,7 +69,7 @@ def write_pmx_model(model_path, input_base_path):
     hidden_dim = pmx_params_dict['hidden_dim']
     multiple_of = params.get("multiple_of", 256)
     ffn_dim_multiplier = params.get("ffn_dim_multiplier", 1)
-    import ipdb;ipdb.set_trace()
+
     #pmx_params_dict['intermediate_dim'] = compute_intermediate_size(hidden_dim, ffn_dim_multiplier, multiple_of)
     # some bugs with compute_intermediate_size
     pmx_params_dict['intermediate_dim'] = params['intermediate_size']
@@ -88,7 +88,7 @@ def write_pmx_model(model_path, input_base_path):
     hf_model_state_dict, state_dict = {}, {}
     for ckpt_path in sorted(Path(input_base_path).glob("*.bin")):
         hf_model_state_dict.update(torch.load(ckpt_path, map_location="cpu"))
-    import ipdb;ipdb.set_trace()
+
 
     for layer_i in range(pmx_params_dict['num_layers']):
         wq, wk, wv = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.W_pack.weight"].split([hidden_dim]*3, dim=0)

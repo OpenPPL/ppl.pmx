@@ -279,7 +279,9 @@ class Transformer(nn.Module):
         TensorDumper.dump(kv_cache, "kv_cache")
         if kv_scale is not None:
             TensorDumper.dump(kv_scale, "kv_scale")
-        attn_mask = PMX.alibi_position_embedding(seqlen_q, seqlen_kv, attn_mask, self.num_heads, h.dtype)
+
+        attn_mask = PMX.alibi_mask(seqlen_q, seqlen_kv, attn_mask, self.num_heads, h.dtype)
+        # TensorDumper.dump(attn_mask, "alibi_mask")
 
         norm = None
         for layer in self.layers:

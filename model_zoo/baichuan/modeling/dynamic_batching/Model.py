@@ -315,7 +315,9 @@ class Transformer(nn.Module):
         if kv_scale is not None:
             TensorDumper.dump(kv_scale, "kv_scale")
 
-        attn_mask = PMX.dynamic_batching.alibi_position_embedding(seqstarts, kvstarts, attn_mask, self.num_heads, h.dtype)
+        attn_mask = PMX.dynamic_batching.alibi_mask(seqstarts, kvstarts, attn_mask, self.num_heads, h.dtype)
+        # TensorDumper.dump(attn_mask, "alibi_mask")
+
         norm = None
         for layer in self.layers:
             h, norm = layer(h, norm, attn_mask, seqstarts, kvstarts, cachestarts,

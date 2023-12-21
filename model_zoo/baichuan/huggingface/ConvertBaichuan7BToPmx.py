@@ -77,9 +77,9 @@ def write_pmx_model(model_path, input_base_path):
 
     # TO DO: GQA / MQA, only test on llama
     num_heads = pmx_params_dict['num_heads']
-    num_kv_heads = pmx_params_dict['num_kv_heads']
-    key_value_dim = pmx_params_dict['hidden_dim']
-    dims_per_head = hidden_dim // num_heads
+    # num_kv_heads = pmx_params_dict['num_kv_heads']
+    # key_value_dim = pmx_params_dict['hidden_dim']
+    # dims_per_head = hidden_dim // num_heads
 
     # load weights
     def unpermute(w, n_heads=num_heads, dim1=hidden_dim, dim2=hidden_dim):

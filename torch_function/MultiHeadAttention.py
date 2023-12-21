@@ -29,10 +29,10 @@ class MultiHeadAttention(torch.autograd.Function):
     def forward(ctx, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, attn_mask: Optional[torch.Tensor],
                 num_heads: int, head_dim: int, is_causal: bool = True, num_kv_heads: int = 0):
         if attn_mask is not None and attn_mask.numel() > 0:
-            assert attn_mask.dim() == 2 or attn_mask.dim() == 4, "attn_mask.dim() is {}".format(attn_mask.dim())
-            if attn_mask.dim() == 4:
+            assert attn_mask.dim() == 2 or attn_mask.dim() == 4 or attn_mask.dim() == 3, "attn_mask.dim() is {}".format(attn_mask.dim())
+            if attn_mask.dim() == 4 or attn_mask.dim() == 3:
                 #assert query.shape[0] == attn_mask.shape[0], "{} is not equal to {}".format(query.shape[0], attn_mask.shape[0])
-                assert num_heads == attn_mask.shape[1], "{} is not equal to {}".format(num_heads, attn_mask.shape[1])
+                assert num_heads == attn_mask.shape[-3], "{} is not equal to {}".format(num_heads, attn_mask.shape[1])
             assert query.shape[1] == attn_mask.shape[-2], "{} is not equal to {}".format(query.shape[1], attn_mask.shape[-2])
             assert key.shape[1] == attn_mask.shape[-1], "{} is not equal to {}".format(key.shape[1], attn_mask.shape[-1])
 
