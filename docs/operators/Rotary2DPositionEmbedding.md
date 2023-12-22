@@ -30,7 +30,7 @@ for b in range(batch):
 
 ## Attributes/Parameters
 
-### `theta`: int(default: 10000)
+### `theta`: float(default: 10000.0)
 
 Hyperameter $\theta$ to adjust rotate angle interval.
 
