@@ -28,7 +28,7 @@ Mark that whether there is bias. Provide convenience for graph optimization.
 
 If true, we assume that the input is already split across the devices and we do not need to split it again.
 
-If false, input should split into $TPsize$ pieces: $(*,K) \rightarrow (*,[K^0,K^1,\cdots,K^t])$, and each device pick its own piece.
+If false, input should split into $TPsize$ pieces: $(\*,K) \rightarrow (\*,[K^0,K^1,\cdots,K^t])$, and each device pick its own piece.
 
 ## Inputs
 
@@ -42,7 +42,7 @@ Shape: $(\*,K)$ or $(\*, K_d)$ for each device $d$ when `input_is_parallel` is `
 
 Transformation weight.
 
-Shape: $(N,K)$ or or $(N,K_d)$ for each device $d$ when $TPsize > 1$. 
+Shape: $(N,K)$ or $(N,K_d)$ for each device $d$ when $TPsize > 1$. 
 
 ### `B`(constant, optional): tensor(T2)
 

@@ -122,3 +122,65 @@ class RowParallelLinear(torch.nn.Module):
             return PMX.row_parallel_linear(
                 X, self.weight, self.bias, self.proc_group,
                 self.in_features, self.out_features, self.input_is_parallel)
+
+class MoeColumnParallelLinear(torch.nn.Module):
+    def __init__(
+        self,
+        proc_group: dist.ProcessGroup,
+        num_experts: int,
+        in_features: int,
+        out_features: int,
+        bias_term: bool = True,
+        gather_output: bool = True) -> None:
+        super().__init__()
+        
+        self.num_experts = num_experts
+        self.in_features = in_features
+        self.out_features = out_features
+        self.gather_output = gather_output
+        self.proc_group = proc_group
+        
+        world_size = 1 if proc_group is None else proc_group.size()
+        assert out_features % world_size == 0, "{} is not divisible by {}".format(out_features, world_size)
+
+        self.out_features_per_partition = out_features // world_size
+
+        self.weight = nn.Parameter(torch.ones(self.num_experts, self.out_features_per_partition, self.in_features))
+        if bias_term:
+            self.bias = nn.Parameter(torch.zeros(self.num_experts, self.out_features_per_partition))
+        else:
+            self.register_parameter("bias", None)
+            
+    def forward(self, X: torch.Tensor, expert_offset: torch.Tensor):
+        return PMX.moe_column_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.gather_output)
+    
+class MoeRowParallelLinear(torch.nn.Module):
+    def __init__(
+        self, 
+        proc_group: dist.ProcessGroup,
+        num_experts: int,
+        in_features: int,
+        out_features: int,
+        bias_term: bool = True,
+        input_is_parallel: bool = False) -> None:
+        super().__init__()
+        
+        self.num_experts = num_experts
+        self.in_features = in_features
+        self.out_features = out_features
+        self.input_is_parallel = input_is_parallel
+        self.proc_group = proc_group
+
+        world_size = 1 if proc_group is None else proc_group.size()
+        assert in_features % world_size == 0, "{} is not divisible by {}".format(in_features, world_size)
+
+        self.in_features_per_partition = in_features // world_size
+        
+        self.weight = nn.Parameter(torch.ones(self.num_experts, self.out_features, self.in_features_per_partition))
+        if bias_term:
+            self.bias = nn.Parameter(torch.zeros(self.num_experts, self.out_features))
+        else:
+            self.register_parameter("bias", None)
+            
+    def forward(self, X: torch.Tensor, expert_offset: torch.Tensor):
+        return PMX.moe_row_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.input_is_parallel)

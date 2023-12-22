@@ -1,14 +1,10 @@
-# dynamic_batching.RotaryPositionEmbedding
+# dynamic_batching.Rotary2DPositionEmbedding
 
-The original definition of `RotaryPositionEmbedding` refers to [here](../RotaryPositionEmbedding.md).
+The original definition of `Rotary2DPositionEmbedding` refers to [here](../Rotary2DPositionEmbedding.md).
 
-For `dynamic_batching.RotaryPositionEmbedding`, start postion and sequence length of each batch are different. And there is no need for `pad_len` because paddings are removed in dynamic batching term.
+For `dynamic_batching.Rotary2DPositionEmbedding`, start postion and sequence length of each batch are different. And there is no need for `pad_len` because paddings are removed in dynamic batching term.
 
 ## Attributes/Parameters
-
-### `rotary_dim`: int(default: 0)
-
-How many elements in dimension $head\\_dim$ to be rotary, must be even number. Default is `0`, which means all elements should be rotary. Otherwise only rotary $Q_r = Q(:\frac{rotary\\_dim}{2})$.
 
 ### `theta`: float(default: 10000.0)
 
@@ -49,6 +45,12 @@ Shape: $(batch)$
 ### `max_seqlen`: scalar(int64)
 
 Maximum sequence length of `query` and `key`, equal to `max(seqstarts[1:]-seqstarts[:batch])`. For parallel computing.
+
+### `first_seqlen`: tensor(int64)
+
+Prefill tokens length of each batch
+
+Shape: $(batch)$
 
 ## Outputs
 
