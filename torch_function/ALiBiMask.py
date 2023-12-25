@@ -49,10 +49,12 @@ class ALiBiMask(torch.autograd.Function):
                     tmp.append(2**(-4 * n / closest_power_of_2))
             return tmp
 
+        seqlen_q, seqlen_kv = int(seqlen_q), int(seqlen_kv)
+        last_dim = seqlen_kv
+        padded_last_dim = (seqlen_kv + 15) // 16 * 16
 
         slopes = torch.tensor(get_slops(num_heads), dtype=data_type)
-        seqlen_q, seqlen_kv = int(seqlen_q), int(seqlen_kv)
-        alibi_mask = torch.full((seqlen_q, seqlen_kv), float("-inf"), dtype=data_type)
+        alibi_mask = torch.full((seqlen_q, padded_last_dim), float("-inf"), dtype=data_type)
 
         for i in range(seqlen_q-1, -1, -1):
             for j in range(seqlen_kv):
@@ -67,12 +69,14 @@ class ALiBiMask(torch.autograd.Function):
         if attention_mask is not None and attention_mask.numel() > 0:
             assert len(attention_mask.shape) == 2 or len(attention_mask.shape) == 4
             if len(attention_mask.shape) == 2:
-                attention_mask = attention_mask.unsqueeze(0).expand(num_heads, seqlen_q, seqlen_kv)
-                alibi_mask = alibi_mask.to(attention_mask) + attention_mask
+                attention_mask = attention_mask.unsqueeze(0).expand(num_heads, -1, -1)
+                alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
+                                              + attention_mask[..., :last_dim])
             if len(attention_mask.shape) == 4:
                 batch = attention_mask.shape[0]
-                alibi_mask = alibi_mask.unsqueeze(0).expand(batch, num_heads, seqlen_q, seqlen_kv)
-                alibi_mask = alibi_mask.to(attention_mask) + attention_mask
+                alibi_mask = alibi_mask.unsqueeze(0).expand(batch, -1, -1, -1)
+                alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
+                                              + attention_mask[..., :last_dim])
         return alibi_mask
 
 

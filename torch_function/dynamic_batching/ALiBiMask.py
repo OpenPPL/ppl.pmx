@@ -46,8 +46,12 @@ class ALiBiMask(torch.autograd.Function):
             return tmp
 
 
+        # pad last dim to compatible with flah attention
+        last_dim = kvstarts[-1]
+        padded_last_dim = (kvstarts[-1] + 15) // 16 * 16
+
         slopes = torch.tensor(get_slops(num_heads), dtype=data_type)
-        alibi_mask = torch.zeros((seqstarts[-1], kvstarts[-1]), dtype=data_type)
+        alibi_mask = torch.zeros((seqstarts[-1], padded_last_dim), dtype=data_type)
 
         seqlens = seqstarts[1:] - seqstarts[:-1]
         kvlens = kvstarts[1:] - kvstarts[:-1]
@@ -73,10 +77,12 @@ class ALiBiMask(torch.autograd.Function):
         if attention_mask is not None and attention_mask.numel() > 0:
             assert len(attention_mask.shape) == 2 or len(attention_mask.shape) == 3
             if len(attention_mask.shape) == 2:
-                attention_mask =  attention_mask.unsqueeze(0).expand(num_heads, -1, -1)
-                alibi_mask = alibi_mask.to(attention_mask) + attention_mask
+                attention_mask = attention_mask.unsqueeze(0).expand(num_heads, -1, -1)
+                alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
+                                            + attention_mask[..., :last_dim])
             if len(attention_mask.shape) == 3:
-                alibi_mask = alibi_mask.to(attention_mask) + attention_mask
+                alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
+                                            + attention_mask[..., :last_dim])
         return alibi_mask
 
 

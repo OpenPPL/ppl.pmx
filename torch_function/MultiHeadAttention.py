@@ -34,7 +34,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 #assert query.shape[0] == attn_mask.shape[0], "{} is not equal to {}".format(query.shape[0], attn_mask.shape[0])
                 assert num_heads == attn_mask.shape[-3], "{} is not equal to {}".format(num_heads, attn_mask.shape[1])
             assert query.shape[1] == attn_mask.shape[-2], "{} is not equal to {}".format(query.shape[1], attn_mask.shape[-2])
-            assert key.shape[1] == attn_mask.shape[-1], "{} is not equal to {}".format(key.shape[1], attn_mask.shape[-1])
+            assert key.shape[1] <= attn_mask.shape[-1], "{} is bigger than {}".format(key.shape[1], attn_mask.shape[-1])
 
         if torch.onnx.is_in_onnx_export():
             return query
@@ -73,7 +73,7 @@ class MultiHeadAttention(torch.autograd.Function):
         if causal_mask is not None:
             scores = scores + causal_mask
         if attn_mask is not None and attn_mask.numel() > 0:
-            scores = scores + attn_mask.to(scores.device)
+            scores = scores + attn_mask.to(scores.device)[..., :seqlen_kv]
         scores = torch.nn.functional.softmax(scores.float(), dim=-1).type_as(_query)
         output = torch.matmul(scores, _value)
         output = output.transpose(1, 2).contiguous()
