@@ -134,7 +134,9 @@ Optional custom mask.
 `seqlens=seqstarts[1:]-seqstarts[:B]` is a sequence contains length of `query` for each batch.
 `kvlens=kvstarts[1:]-kvstarts[:B]` is a sequence contains length of `key` and `value` for each batch.
 
-Shape: $(num\\_heads, {\rm sum}(seqlens), {\rm sum}(kvlens))$ or $({\rm sum}(seqlens), {\rm sum}(kvlens))$
+Note: The last dim of mask could be bigger than ${\rm sum}(kvlens)$, because in some flash attention implement may force it to aligned with specific padding value.
+
+Shape: $(num\\_heads, {\rm sum}(seqlens), >={\rm sum}(kvlens))$ or $({\rm sum}(seqlens), >={\rm sum}(kvlens))$
 
 ## Outputs
 
