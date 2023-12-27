@@ -215,7 +215,7 @@ class TransformerBlock(nn.Module):
                  attn_wqkv_bias_term: bool,
                  attn_wo_bias_term: bool,
                  ffn_linear_bias_term: bool,
-                 rotary_dim: int, 
+                 rotary_dim: int,
                  proc_group: dist.ProcessGroup):
         super().__init__()
         self.attention = Attention(args,

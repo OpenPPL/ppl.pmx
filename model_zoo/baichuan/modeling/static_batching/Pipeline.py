@@ -36,6 +36,12 @@ class BaiChuan(__TextGenerator__):
             return next_token
 
 
+        def padto16(x: torch.Tensor):
+            last_dim = x.shape[-1]
+            padded_dim = (last_dim + 15) // 16 * 16
+            return torch.nn.functional.pad(x, (0, padded_dim - last_dim), "constant", 0)
+
+
         bsz = len(prompts_ids)
 
         min_prompt_size = min([len(t) for t in prompts_ids])
@@ -78,6 +84,7 @@ class BaiChuan(__TextGenerator__):
             if self.model.params.auto_causal == False and token_ids.shape[1] > 1:
                 attn_mask = torch.full((min_prompt_size, min_prompt_size), float("-inf")).cuda()
                 attn_mask = torch.triu(attn_mask, diagonal=1).to(torch.float16)
+                attn_mask = padto16(attn_mask)
 
             logits = self.model.forward(token_ids, attn_mask, start_pos, seqlen_q, seqlen_kv, kv_cache, kv_scale)
             if temperature > 0:
