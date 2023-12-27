@@ -129,7 +129,8 @@ class LLaMA(__TextGenerator__):
 
             attn_mask = torch.empty(0, dtype=torch.float16)
             if self.model.params.auto_causal == False and decoding_batches < current_batches:
-                attn_mask = torch.zeros((_seqstarts[-1], _kvstarts[-1]), dtype=torch.float16).cuda()
+                padded_last_dim = (_kvstarts[-1] + 15) // 16 * 16
+                attn_mask = torch.zeros((_seqstarts[-1], padded_last_dim), dtype=torch.float16).cuda()
                 for b in range(decoding_batches, current_batches):
                     seqbeg = _seqstarts[b]
                     seqend = _seqstarts[b+1]
