@@ -35,7 +35,7 @@ class ALiBiMask(torch.autograd.Function):
             return torch.zeros((num_heads, seqstarts[-1], kvstarts[-1]), dtype=data_type)
 
 
-        def get_slops(heads):
+        def get_slopes(heads):
             tmp = []
             closest_power_of_2 = 2 ** math.floor(math.log2(heads))
             for n in range(1, closest_power_of_2+1):
@@ -50,7 +50,7 @@ class ALiBiMask(torch.autograd.Function):
         last_dim = kvstarts[-1]
         padded_last_dim = (kvstarts[-1] + 15) // 16 * 16
 
-        slopes = torch.tensor(get_slops(num_heads), dtype=data_type)
+        slopes = torch.tensor(get_slopes(num_heads), dtype=data_type)
         alibi_mask = torch.zeros((seqstarts[-1], padded_last_dim), dtype=data_type)
 
         seqlens = seqstarts[1:] - seqstarts[:-1]
