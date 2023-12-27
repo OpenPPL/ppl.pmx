@@ -21,7 +21,8 @@ class InsertEmbedding(torch.autograd.Function):
         if torch.onnx.is_in_onnx_export():
             pat_batch = patstarts.numel() - 1
             if pat_batch == 1:
-                return torch.zeros((X.shape[0] + pat_batch * P.shape[0], X.shape[1]),
+                in_batch = seqstarts.numel() - 1
+                return torch.zeros((X.shape[0] + in_batch * P.shape[0], X.shape[1]),
                                    dtype=X.dtype).to(X.device)
             else:
                 return torch.zeros((X.shape[0] + P.shape[0], X.shape[1]),
