@@ -15,8 +15,8 @@ $$
 
 
 The figrue offers a visualization.
-ALiBi adds a constant bias (right) to each attention score ($\mathbf{q}_i \cdot \mathbf{k}_j$, left). m is a head-specific scalar that is set and not learned throughout training. 
-The following code shows the calculation process.
+ALiBi adds a constant bias (right) to each attention score ($\mathbf{q}_i \cdot \mathbf{k}_j$, left). $m$ is a head-specific scalar that is set and not learned throughout training. 
+The following code shows the calculation process of mask.
 
 ```python
 alibi_mask = torch.full((seqlen_q, seqlen_kv), float('inf'), dtype=data_type)
@@ -30,6 +30,8 @@ alibi_mask = alibi_mask.unsqueeze(0).expand(num_heads, -1, -1)
 # slopes_m shape -> (num_heads, 1, 1)
 alibi_mask = slopes_m * alibi_mask
 ```
+
+The following code shows the calculation process of $m$ refer to [ALiBiSlope](ALiBiSlope.md).
 
 ## Attributes/Parameters
 
