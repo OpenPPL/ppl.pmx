@@ -33,10 +33,12 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
     dims_per_head = hidden_dim // params['num_heads']
     write_json(params, os.path.join(model_path, "pmx_params.json"))
 
-    loaded = [
-        torch.load(os.path.join(input_base_path, f"model.{i}.pth"), map_location="cpu")
-        for i in range(num_shards)
-    ]
+    checkpoints = sorted(Path(input_base_path).glob("*.pth"))
+    assert num_shards == len(
+        checkpoints
+    ), f"Loading a checkpoint for num_shards={len(checkpoints)} but num_shards is {num_shards}"
+
+    loaded = [torch.load(checkpoints[i], map_location="cpu") for i in range(num_shards)]
 
     state_dict = {}
     for layer_i in range(params['num_layers']):
