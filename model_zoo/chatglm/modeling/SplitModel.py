@@ -91,7 +91,7 @@ def split_pmx_model(model_path, input_base_path, num_shards):
             else:
                 tmp_weight_list[idx].update({key:value[idx].clone()})
     for idx, weight_dict in enumerate(tmp_weight_list):
-        torch.save(weight_dict, os.path.join(model_path, f"model.{idx}.pth"))
+        torch.save(weight_dict, os.path.join(model_path, f"model.{idx:02d}.pth"))
 
 
 def main():
