@@ -11,8 +11,8 @@ class SwiGLU(torch.autograd.Function):
     @staticmethod
     def forward(self, X: torch.Tensor, beta: float = 1.0):
         if torch.onnx.is_in_onnx_export():
-            return torch.zeros(*X.shape[:-1], X.shape[:-1]//2, dtype=X.dtype).to(X.device)
-        x, g = torch.split(X, [X.shape[:-1]//2, X.shape[:-1]//2], -1)
+            return torch.zeros(*X.shape[:-1], X.shape[-1]//2, dtype=X.dtype).to(X.device)
+        x, g = torch.split(X, [X.shape[-1]//2, X.shape[-1]//2], -1)
         Y = g * x * torch.nn.functional.sigmoid(beta * x)
         return Y
 
