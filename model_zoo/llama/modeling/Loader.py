@@ -21,6 +21,7 @@ def load(
     friendly_gqa: bool, # done gqa by repeating key and value by key_value_cache op
     fused_qkv: bool, # fuse qkv linear
     fused_kvcache: bool, # fuse key_value_cache and multi_head_attention
+    fused_ffn_glu: bool, # fuse feed forward gate linear unit
     auto_causal: bool, # causal mask is auto done by attention op, no need to pass additional mask to the model
     quantized_cache: bool, # 8bit kv cache quantization
     cache_layout: int, # change kv cache layout for hardware performance friendly
@@ -83,6 +84,7 @@ def load(
                         friendly_gqa,
                         fused_qkv,
                         fused_kvcache,
+                        fused_ffn_glu,
                         attn_wqkv_bias_term,
                         attn_wo_bias_term,
                         ffn_linear_bias_term,
