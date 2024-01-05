@@ -149,29 +149,41 @@ class FeedForward(nn.Module):
         self,
         args: ModelParams,
         layer_id: int,
+        fused_ffn_glu: bool,
         linear_bias_term: bool,
         proc_group: dist.ProcessGroup
     ):
         super().__init__()
         self.layer_id = layer_id
+        self.fused_ffn_glu = fused_ffn_glu
 
-        self.w1 = ColumnParallelLinear(
-            proc_group, args.hidden_dim, args.intermediate_dim,
-            bias_term=linear_bias_term, gather_output=False)
+        if self.fused_ffn_glu:
+            self.wu = ColumnParallelLinear(
+                proc_group, args.hidden_dim, 2 * args.intermediate_dim,
+                bias_term=linear_bias_term, gather_output=False)
+        else:
+            self.w1 = ColumnParallelLinear(
+                proc_group, args.hidden_dim, args.intermediate_dim,
+                bias_term=linear_bias_term, gather_output=False)
+            self.w3 = ColumnParallelLinear(
+                proc_group, args.hidden_dim, args.intermediate_dim,
+                bias_term=linear_bias_term, gather_output=False)
         self.w2 = RowParallelLinear(
             proc_group, args.intermediate_dim, args.hidden_dim,
             bias_term=linear_bias_term, input_is_parallel=True)
-        self.w3 = ColumnParallelLinear(
-            proc_group, args.hidden_dim, args.intermediate_dim,
-            bias_term=linear_bias_term, gather_output=False)
 
 
     def forward(self, x):
-        x1 = self.w1(x)
-        # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
-        x3 = self.w3(x)
-        # TensorDumper.dump(x3, "layer{}_ffn_w3".format(self.layer_id))
-        x13 = PMX.silu(x1, x3)
+        if self.fused_ffn_glu:
+            x13 = self.wu(x)
+            # TensorDumper.dump(x13, "layer{}_ffn_wu".format(self.layer_id))
+            x13 = PMX.swiglu(x13)
+        else:
+            x1 = self.w1(x)
+            # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
+            x3 = self.w3(x)
+            # TensorDumper.dump(x3, "layer{}_ffn_w3".format(self.layer_id))
+            x13 = PMX.silu(x1, x3)
         # TensorDumper.dump(x13, "layer{}_ffn_mul_silu".format(self.layer_id))
         output = self.w2(x13)
         # TensorDumper.dump(output, "layer{}_ffn_w2".format(self.layer_id))
@@ -184,6 +196,7 @@ class TransformerBlock(nn.Module):
                  friendly_gqa: bool,
                  fused_qkv: bool,
                  fused_kvcache: bool,
+                 fused_ffn_glu: bool,
                  attn_linear_bias_term: bool,
                  ffn_linear_bias_term: bool,
                  proc_group: dist.ProcessGroup):
@@ -197,6 +210,7 @@ class TransformerBlock(nn.Module):
                                    proc_group=proc_group)
         self.feed_forward = FeedForward(args,
                                         layer_id,
+                                        fused_ffn_glu,
                                         ffn_linear_bias_term,
                                         proc_group=proc_group)
 
@@ -224,6 +238,7 @@ class Transformer(nn.Module):
                  friendly_gqa: bool,
                  fused_qkv: bool,
                  fused_kvcache: bool,
+                 fused_ffn_glu: bool,
                  attn_linear_bias_term: bool,
                  ffn_linear_bias_term: bool,
                  proc_group: dist.ProcessGroup):
@@ -234,6 +249,7 @@ class Transformer(nn.Module):
         self.proc_group = proc_group
         self.fused_qkv = fused_qkv
         self.fused_kvcache = fused_kvcache
+        self.fused_ffn_glu = fused_ffn_glu
         self.num_heads = params.num_heads
 
         world_size = 1 if proc_group is None else proc_group.size()
@@ -253,6 +269,7 @@ class Transformer(nn.Module):
                 friendly_gqa,
                 fused_qkv,
                 fused_kvcache,
+                fused_ffn_glu,
                 attn_linear_bias_term,
                 ffn_linear_bias_term,
                 proc_group=proc_group))
@@ -330,6 +347,21 @@ class Transformer(nn.Module):
                         self.get_submodule(module_name)._parameters[param_name][
                             self.local_q_dim + self.local_kv_dim:
                             self.local_q_dim + self.local_kv_dim * 2] = value
+                        replaced_key = module_name + '.' + param_name
+                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                if self.fused_ffn_glu:
+                    if 'feed_forward.w1' in key:
+                        loaded_params.add(key)
+                        module_name = module_name.replace('w1', 'wu')
+                        self.get_submodule(module_name)._parameters[param_name][
+                            :self.local_imm_dim] = value
+                        replaced_key = module_name + '.' + param_name
+                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                    if 'feed_forward.w3' in key:
+                        loaded_params.add(key)
+                        module_name = module_name.replace('w3', 'wu')
+                        self.get_submodule(module_name)._parameters[param_name][
+                            self.local_imm_dim:] = value
                         replaced_key = module_name + '.' + param_name
                         print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
             except AttributeError as e:
