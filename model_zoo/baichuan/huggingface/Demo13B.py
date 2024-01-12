@@ -43,7 +43,6 @@ def main(
         ckpt_dir, params, friendly_gqa,
         fused_qkv, fused_kvcache, fused_ffn_glu,
         auto_causal, quantized_cache, cache_layout,
-        quantized_cache, cache_layout,
         cache_mode, dynamic_batching,
         False, False, False,
         dump_tensor_path, dump_steps
