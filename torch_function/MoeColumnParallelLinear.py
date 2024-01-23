@@ -7,9 +7,9 @@ import torch.distributed as dist
 class MoeColumnParallelLinear(torch.autograd.Function):
     @staticmethod
     def symbolic(
-        g: torch._C.Graph, X: torch.Value, expert_offset: torch.Value, W: torch.Value, B: torch.Value,
-        proc_group: dist.ProcessGroup, num_experts: int,
-        in_features: int, out_features: int, gather_output: bool = True):
+        g: torch._C.Graph, X: torch.Value, expert_offset: torch.Value,
+        W: torch.Value, B: torch.Value, proc_group: dist.ProcessGroup,
+        num_experts: int, in_features: int, out_features: int, gather_output: bool = True):
         if B is not None:
             Y = g.op("pmx::MoeColumnParallelLinear", X, expert_offset, W, B, 
                                 num_experts_i = num_experts,
@@ -25,11 +25,12 @@ class MoeColumnParallelLinear(torch.autograd.Function):
                                 bias_term_i = False,
                                 gather_output_i = gather_output)
         return Y
-    
+
+
     @staticmethod
-    def forward(self, X: torch.Tensor, expert_offset: torch.Tensor, W: torch.Tensor, B: torch.Tensor,
-        proc_group: dist.ProcessGroup, num_experts: int,
-        in_features: int, out_features: int, gather_output: bool = True):
+    def forward(self, X: torch.Tensor, expert_offset: torch.Tensor,
+                W: torch.Tensor, B: torch.Tensor, proc_group: dist.ProcessGroup,
+                num_experts: int, in_features: int, out_features: int, gather_output: bool = True):
         # X: [*, hidden_dim]
         # expert_offset: [num_experts+1]
         # W: [num_experts, hidden_dim, hidden_dim]
@@ -61,7 +62,9 @@ class MoeColumnParallelLinear(torch.autograd.Function):
                 if expert_offset[i+1] - expert_offset[i] <= 0:
                     continue
                 
-                output_parallel[expert_offset[i]: expert_offset[i+1]] = F.linear(X_flat[expert_offset[i]: expert_offset[i+1]], W[i], B[i] if B is not None else None)
+                output_parallel[expert_offset[i]: expert_offset[i+1]] = (
+                    F.linear(X_flat[expert_offset[i]: expert_offset[i+1]], W[i], B[i] if B is not None else None)
+                )
                 
             output_parallel = output_parallel.view(*X.shape[:-1], out_dim)
 
@@ -76,12 +79,19 @@ class MoeColumnParallelLinear(torch.autograd.Function):
             else:
                 Y = output_parallel
         return Y
-                
+
+
 def moe_column_parallel_linear(
-    X: torch.Tensor, expert_offset: torch.Tensor, W: torch.Tensor, B: torch.Tensor,
-        proc_group: dist.ProcessGroup, num_experts: int,
-        in_features: int, out_features: int, gather_output: bool = True) -> torch.Tensor:
-    return MoeColumnParallelLinear.apply(X, expert_offset, W, B, proc_group, num_experts, in_features, out_features, gather_output)
+    X: torch.Tensor, expert_offset: torch.Tensor,
+    W: torch.Tensor, B: torch.Tensor, proc_group: dist.ProcessGroup,
+    num_experts: int, in_features: int,
+    out_features: int, gather_output: bool = True) -> torch.Tensor:
+
+    return MoeColumnParallelLinear.apply(
+        X, expert_offset, W, B, proc_group,
+        num_experts, in_features,
+        out_features, gather_output)
+
 
 if __name__ == "__main__":
     class TestModule1(torch.nn.Module):
@@ -114,7 +124,10 @@ if __name__ == "__main__":
                 self.register_parameter("bias", None)
                 
         def forward(self, X: torch.Tensor, expert_offset: torch.Tensor):
-            return moe_column_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.gather_output)
+            return moe_column_parallel_linear(X, expert_offset, self.weight,
+                                              self.bias, self.proc_group,
+                                              self.num_experts, self.in_features,
+                                              self.out_features, self.gather_output)
     
     num_experts = 8
     test_op1 = TestModule1(None, num_experts, 1024, 4096, True, False)

@@ -20,7 +20,8 @@ class Linear(torch.autograd.Function):
                     out_features_i = out_features,
                     bias_term_i = False)
         return Y
-    
+
+
     @staticmethod
     def forward(
         self, X: torch.Tensor, W: torch.Tensor, B: torch.Tensor, in_features: int, out_features: int):
@@ -30,6 +31,7 @@ class Linear(torch.autograd.Function):
         else:
             Y = F.linear(X, W, B)
             return Y
+
 
 def linear(
     X: torch.Tensor, W: torch.Tensor, B: torch.Tensor, in_features: int, out_features: int):

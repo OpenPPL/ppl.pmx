@@ -50,17 +50,18 @@ class RotaryPositionEmbedding(torch.autograd.Function):
 
 
         def do_rotate(x: torch.Tensor, cos: torch.tensor, sin: torch.tensor):
-            _x = x.view(*x.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
             x_rot = _x[..., :dim]
             x_pass = _x[..., dim:]
+            _x = x.view(*x.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+
             x_a = x_rot[..., :x_rot.shape[-1] // 2]
             x_b = x_rot[..., x_rot.shape[-1] // 2:]
             x_a_embed = x_a * cos - x_b * sin
             x_b_embed = x_b * cos + x_a * sin
             x_embed = torch.cat((x_a_embed, x_b_embed), dim=-1)
-            
-            x_embed = torch.cat((x_embed, x_pass), dim=-1)
+
             x_embed = x_embed.view(*x_embed.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
+            x_embed = torch.cat((x_embed, x_pass), dim=-1)
             return x_embed
 
         rotated_query = do_rotate(query.float(), cos, sin).type_as(query)

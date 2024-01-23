@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from torch import nn
 import torch.distributed as dist
 
+
 class MoeRowParallelLinear(torch.autograd.Function):
     @staticmethod
     def symbolic(g: torch._C.Graph, X: torch.Value, expert_offset: torch.Value, 
@@ -24,10 +25,12 @@ class MoeRowParallelLinear(torch.autograd.Function):
                      input_is_parallel_i = input_is_parallel)
         return Y
 
+
     @staticmethod
-    def forward(self, X: torch.Tensor, expert_offset: torch.Tensor, W: torch.Tensor, B: torch.Tensor,
-         proc_group: dist.ProcessGroup, num_experts: int, in_features: int,
-         out_features: int, input_is_parallel: bool = False):
+    def forward(self, X: torch.Tensor, expert_offset: torch.Tensor,
+                W: torch.Tensor, B: torch.Tensor, proc_group: dist.ProcessGroup,
+                num_experts: int, in_features: int, out_features: int,
+                input_is_parallel: bool = False):
         # X: [*, hidden_dim]
         # expert_offset: [num_experts+1]
         # W: [num_experts, hidden_dim, hidden_dim]
@@ -45,7 +48,9 @@ class MoeRowParallelLinear(torch.autograd.Function):
                 if expert_offset[i+1] - expert_offset[i] <= 0:
                     continue
                 
-                output_parallel[expert_offset[i]: expert_offset[i+1]] = F.linear(X_flat[expert_offset[i]: expert_offset[i+1]], W[i])
+                output_parallel[expert_offset[i]: expert_offset[i+1]] = (
+                    F.linear(X_flat[expert_offset[i]: expert_offset[i+1]], W[i])
+                )
                 
             output_parallel = output_parallel.view(*X.shape[:-1], out_dim)
 
@@ -57,10 +62,16 @@ class MoeRowParallelLinear(torch.autograd.Function):
         return output_parallel
 
 
-def moe_row_parallel_linear(X: torch.Tensor, expert_offset: torch.Tensor, W: torch.Tensor, B: torch.Tensor, 
-         proc_group: dist.ProcessGroup, num_experts: int, in_features: int,
-         out_features: int, input_is_parallel: bool = False):
-    return MoeRowParallelLinear.apply(X, expert_offset, W, B, proc_group, num_experts, in_features, out_features, input_is_parallel)
+def moe_row_parallel_linear(X: torch.Tensor, expert_offset: torch.Tensor,
+                            W: torch.Tensor, B: torch.Tensor,
+                            proc_group: dist.ProcessGroup, num_experts: int,
+                            in_features: int, out_features: int,
+                            input_is_parallel: bool = False):
+
+    return MoeRowParallelLinear.apply(X, expert_offset, W, B, proc_group,
+                                      num_experts, in_features, out_features,
+                                      input_is_parallel)
+
 
 if __name__ == "__main__":
     class TestModule1(torch.nn.Module):
@@ -90,9 +101,11 @@ if __name__ == "__main__":
                 self.bias = nn.Parameter(torch.zeros(self.num_experts, self.out_features))
             else:
                 self.register_parameter("bias", None)
-                
+
+
         def forward(self, X: torch.Tensor, expert_offset: torch.Tensor):
             return moe_row_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.input_is_parallel)
+
 
     num_experts = 8
     test_op1 = TestModule1(None, num_experts, 1024, 4096, True, True)
