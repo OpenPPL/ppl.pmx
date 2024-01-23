@@ -10,14 +10,14 @@ import torch.distributed as dist
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
-from ModelParams import MoeModelParams
+from ModelParams import ModelParams
 from ModelUtils import __TextGenerator__
 import ModelParallel
 
 
 def load(
     ckpt_dir: str,
-    model_params: MoeModelParams,
+    model_params: ModelParams,
     friendly_gqa: bool, # done gqa by repeating key and value by key_value_cache op
     fused_qkv: bool, # fuse qkv linear
     fused_kvcache: bool, # fuse key_value_cache and multi_head_attention

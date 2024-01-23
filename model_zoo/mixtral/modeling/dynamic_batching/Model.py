@@ -10,7 +10,7 @@ from typing import Mapping, Any, Optional
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
 import torch_function as PMX
-from ModelParams import MoeModelParams
+from ModelParams import ModelParams
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding, MoeColumnParallelLinear, MoeRowParallelLinear
 from ModelLayers import SkipRMSNorm, Linear
@@ -20,7 +20,7 @@ TensorDumper = ModelUtils.__TensorDumper__()
 class Attention(nn.Module):
     def __init__(
             self,
-            args: MoeModelParams,
+            args: ModelParams,
             layer_id: int,
             friendly_gqa: bool,
             fused_qkv: bool,
@@ -155,7 +155,7 @@ class Attention(nn.Module):
 class MoeFeedForward(nn.Module):
     def __init__(
         self,
-        args: MoeModelParams,
+        args: ModelParams,
         layer_id: int,
         fused_ffn_glu: bool,
         linear_bias_term: bool,
@@ -165,7 +165,7 @@ class MoeFeedForward(nn.Module):
         self.layer_id = layer_id
         self.fused_ffn_glu = fused_ffn_glu
         self.num_experts = args.num_experts
-        self.num_experts_per_tok = args.num_experts_per_tok
+        self.num_experts_per_token = args.num_experts_per_token
         self.gate = Linear(args.hidden_dim, args.num_experts, bias_term=False)
 
         if self.fused_ffn_glu:
@@ -187,7 +187,7 @@ class MoeFeedForward(nn.Module):
     def forward(self, x):
         router_logits = self.gate(x)
 
-        x_experts, expert_weights, invert_permutation, expert_offset = PMX.moe_select(x, router_logits, self.num_experts, self.num_experts_per_tok)
+        x_experts, expert_weights, invert_permutation, expert_offset = PMX.moe_select(x, router_logits, self.num_experts, self.num_experts_per_token)
 
         if self.fused_ffn_glu:
             x13 = self.wu(x_experts, expert_offset)
@@ -203,7 +203,7 @@ class MoeFeedForward(nn.Module):
         x_out = self.w2(x13, expert_offset)
         # TensorDumper.dump(x_out, "layer{}_ffn_w2".format(self.layer_id))
 
-        output = PMX.moe_reduce(x_out, expert_weights, invert_permutation, self.num_experts_per_tok)
+        output = PMX.moe_reduce(x_out, expert_weights, invert_permutation, self.num_experts_per_token)
         # TensorDumper.dump(output, "layer{}_ffn_output".format(self.layer_id))
 
         return output
@@ -211,7 +211,7 @@ class MoeFeedForward(nn.Module):
 
 class TransformerBlock(nn.Module):
     def __init__(self, layer_id: int,
-                 args: MoeModelParams,
+                 args: ModelParams,
                  friendly_gqa: bool,
                  fused_qkv: bool,
                  fused_kvcache: bool,
@@ -262,7 +262,7 @@ class TransformerBlock(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, params: MoeModelParams,
+    def __init__(self, params: ModelParams,
                  friendly_gqa: bool,
                  fused_qkv: bool,
                  fused_kvcache: bool,
@@ -320,22 +320,22 @@ class Transformer(nn.Module):
         # TensorDumper.dump(h, "emb_out")
 
         _kv_scale = kv_scale
-        # TensorDumper.dump(tokens, "token_ids")
-        # if attn_mask is not None:
-        #     TensorDumper.dump(attn_mask, "attn_mask")
+        TensorDumper.dump(tokens, "token_ids")
+        if attn_mask is not None:
+            TensorDumper.dump(attn_mask, "attn_mask")
         if self.fused_kvcache and attn_mask is not None:
             if kv_scale is None: # mount an empty scale for friendly exporting
                 _kv_scale = torch.empty(0, dtype=h.dtype)
-        # TensorDumper.dump(seqstarts, "seqstarts")
-        # TensorDumper.dump(kvstarts, "kvstarts")
-        # TensorDumper.dump(cachestarts, "cachestarts")
-        # TensorDumper.dump(decoding_batches, "decoding_batches")
-        # TensorDumper.dump(start_pos, "start_pos")
-        # TensorDumper.dump(max_seqlen, "max_seqlen")
-        # TensorDumper.dump(max_kvlen, "max_kvlen")
-        # TensorDumper.dump(kv_cache, "kv_cache")
-        # if kv_scale is not None:
-        #     TensorDumper.dump(kv_scale, "kv_scale")
+        TensorDumper.dump(seqstarts, "seqstarts")
+        TensorDumper.dump(kvstarts, "kvstarts")
+        TensorDumper.dump(cachestarts, "cachestarts")
+        TensorDumper.dump(decoding_batches, "decoding_batches")
+        TensorDumper.dump(start_pos, "start_pos")
+        TensorDumper.dump(max_seqlen, "max_seqlen")
+        TensorDumper.dump(max_kvlen, "max_kvlen")
+        TensorDumper.dump(kv_cache, "kv_cache")
+        if kv_scale is not None:
+            TensorDumper.dump(kv_scale, "kv_scale")
 
         norm = None
         for layer in self.layers:
@@ -350,7 +350,7 @@ class Transformer(nn.Module):
         output = self.output(gathered_h)  # only compute last logits
         # TensorDumper.dump(output, "logits_before_cast")
         output = output.float()
-        # TensorDumper.dump(output, "logits")
+        TensorDumper.dump(output, "logits")
         return output
     
 

@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../..")
 
 import mixtral.modeling.Loader as Loader
-from ModelParams import MoeModelParams
+from ModelParams import ModelParams
 
 
 def main(
@@ -26,7 +26,7 @@ def main(
     auto_causal = True
     with open(Path(ckpt_dir) / "pmx_params.json", "r") as f:
         params = json.loads(f.read())
-    params: MoeModelParams = MoeModelParams(**params)
+    params: ModelParams = ModelParams(**params)
 
     generator = Loader.load(
         ckpt_dir, params, friendly_gqa,

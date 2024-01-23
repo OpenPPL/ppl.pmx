@@ -1,17 +1,25 @@
 import torch
 
+
 class MoeSelect(torch.autograd.Function):
     @staticmethod
     def symbolic(
-        g: torch._C.Graph, X: torch.Value, scores: torch.Value, num_experts: int, num_experts_per_token: int):
-        X_expand_permute, expert_weights, invert_permutation, expert_offset = g.op("pmx::MoeSelect", X, scores, 
-                num_experts_i=num_experts, num_experts_per_token_i=num_experts_per_token, 
+        g: torch._C.Graph, X: torch.Value, scores: torch.Value,
+        num_experts: int, num_experts_per_token: int):
+
+        X_expand_permute, expert_weights, invert_permutation, expert_offset = (
+            g.op("pmx::MoeSelect", X, scores, 
+                num_experts_i=num_experts,
+                num_experts_per_token_i=num_experts_per_token, 
                 outputs = 4)
+        )
         
-        return X_expand_permute.setTypeAs(X), expert_weights.setTypeAs(expert_weights), invert_permutation, expert_offset
+        return X_expand_permute, expert_weights, invert_permutation, expert_offset
+
 
     @staticmethod
-    def forward(self, X: torch.Tensor, scores: torch.Tensor, num_experts: int, num_experts_per_token: int):
+    def forward(self, X: torch.Tensor, scores: torch.Tensor,
+                num_experts: int, num_experts_per_token: int):
         # X: [*, hidden_dim]
         # scores: [*, n_experts]
         # X_expand_permute: [*, num_experts_per_token, hidden_dim]
@@ -34,7 +42,7 @@ class MoeSelect(torch.autograd.Function):
             flat_expert_indices = expert_indices.view(-1)   # (seqlen * num_experts_per_token)
             
             sorted_expert_indices, permute_token_idx = flat_expert_indices.sort(stable=True)
-            X_expand_permute = X_expand_permute.repeat_interleave(num_experts_per_token, dim=0)  # (seqlen * num_experts_per_token, hidden_dim)
+            X_expand_permute = X_expand_permute.repeat_interleave(num_experts_per_token, dim=0) # (seqlen * num_experts_per_token, hidden_dim)
             
             X_expand_permute = X_expand_permute[permute_token_idx]
 
@@ -52,11 +60,15 @@ class MoeSelect(torch.autograd.Function):
             expert_offset[num_experts] = X_expand_permute.size(0)
             X_expand_permute = X_expand_permute.view(*origin_shape[:-1], num_experts_per_token, -1)
             invert_permutation = invert_permutation.view(*origin_shape[:-1], num_experts_per_token)
-            
+
             return X_expand_permute, expert_weights, invert_permutation, expert_offset 
 
-def moe_select(X: torch.Tensor, scores: torch.Tensor, num_experts: int, num_experts_per_token: int):
+
+def moe_select(X: torch.Tensor, scores: torch.Tensor,
+               num_experts: int, num_experts_per_token: int):
+
     return MoeSelect.apply(X, scores, num_experts, num_experts_per_token)
+
 
 if __name__ == "__main__":
     class TestModule(torch.nn.Module):
@@ -64,10 +76,12 @@ if __name__ == "__main__":
             super().__init__()
             self.num_experts = num_experts
             self.num_experts_per_token = num_experts_per_token
-        
+
+
         def forward(self, X: torch.Tensor, scores: torch.Tensor):
             return moe_select(X, scores, self.num_experts, self.num_experts_per_token)
-        
+
+
     num_experts, num_experts_per_token = 8, 2
     test_op = TestModule(num_experts, num_experts_per_token)
     X = torch.randn(8, 4096)

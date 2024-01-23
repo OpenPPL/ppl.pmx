@@ -65,7 +65,7 @@ def write_pmx_model(model_path, input_base_path):
     pmx_params_dict['rope_theta'] = params['rope_theta']
     
     pmx_params_dict['num_experts'] = params['num_local_experts']
-    pmx_params_dict['num_experts_per_tok'] = params['num_experts_per_tok']
+    pmx_params_dict['num_experts_per_token'] = params['num_experts_per_tok']
     pmx_params_dict['sliding_window'] = params['sliding_window']
     
     write_json(pmx_params_dict, os.path.join(model_path, "pmx_params.json"))
