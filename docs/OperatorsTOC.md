@@ -10,6 +10,11 @@
 | [InsertEmbedding](operators/InsertEmbedding.md)  |
 | [KeyValueCache](operators/KeyValueCache.md)  |
 | [LayerNorm](operators/LayerNorm.md)  |
+| [Linear](operators/Linear.md)  |
+| [MoeColumnParallelLinear](operators/MoeColumnParallelLinear.md)  |
+| [MoeReduce](operators/MoeReduce.md)  |
+| [MoeRowParallelLinear](operators/MoeRowParallelLinear.md)  |
+| [MoeSelect](operators/MoeSelect.md)  |
 | [MultiHeadAttention](operators/MultiHeadAttention.md)  |
 | [MultiHeadCacheAttention](operators/MultiHeadCacheAttention.md)  |
 | [ParallelEmbedding](operators/ParallelEmbedding.md)  |
@@ -20,6 +25,7 @@
 | [RowParallelLinear](operators/RowParallelLinear.md)  |
 | [SiLU](operators/SiLU.md)  |
 | [SwiGLU](operators/SwiGLU.md)  |
+| [Swish](operators/Swish.md)  |
 | [dynamic_batching.ALiBiMask](operators/dynamic_batching/ALiBiMask.md)  |
 | [dynamic_batching.InsertEmbedding](operators/dynamic_batching/InsertEmbedding.md)  |
 | [dynamic_batching.KeyValueCache](operators/dynamic_batching/KeyValueCache.md)  |
