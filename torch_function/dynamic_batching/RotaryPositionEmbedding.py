@@ -6,22 +6,29 @@ class RotaryPositionEmbedding(torch.autograd.Function):
     def symbolic(g, query: torch.Value, key: torch.Value,
                 seqstarts: torch.Value, start_pos: torch.Value,
                 max_seqlen: torch.Value, rotary_dim: int = 0,
-                theta: float = 10000.0, bypass_key: bool = False):
+                theta: float = 10000.0, bypass_key: bool = False,
+                max_position_embeddings: int = 2048,
+                rope_scaling_type: str = '', rope_scaling_factor: float = 1.0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         rotated_query, rotated_key = g.op('pmx.dynamic_batching::RotaryPositionEmbedding',
             query, key, seqstarts, start_pos, max_seqlen,
             rotary_dim_i=rotary_dim,
             theta_f=theta,
             bypass_key_i=bypass_key,
+            max_position_embeddings_i=max_position_embeddings,
+            rope_scaling_type_s=rope_scaling_type,
+            rope_scaling_factor_f=rope_scaling_factor,
             outputs=2)
         return rotated_query.setTypeAs(query), rotated_key.setTypeAs(key)
 
 
     @staticmethod
-    def forward(ctx, query: torch.Tensor, key: torch.Tensor, 
+    def forward(ctx, query: torch.Tensor, key: torch.Tensor,
                 seqstarts: torch.Tensor, start_pos: torch.Tensor,
                 max_seqlen: torch.Tensor, rotary_dim: int = 0,
-                theta: float = 10000.0, bypass_key: bool = False):
+                theta: float = 10000.0, bypass_key: bool = False,
+                max_position_embeddings: int = 2048,
+                rope_scaling_type: str = '', rope_scaling_factor: float = 1.0):
         if torch.onnx.is_in_onnx_export():
             return query, key
 
@@ -39,14 +46,14 @@ class RotaryPositionEmbedding(torch.autograd.Function):
             x_embed = torch.cat((x_a_embed, x_b_embed), dim=-1)
 
             x_embed = x_embed.view(*x_embed.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
-            
+
             x_embed = torch.cat((x_embed, x_pass), dim=-1)
             return x_embed
 
         rotated_query = torch.zeros_like(query)
         rotated_key = torch.zeros_like(key)
 
-        freqs = (1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float, device=query.device)[: (dim // 2)] / dim)))
+        # freqs = (1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float, device=query.device)[: (dim // 2)] / dim)))
         seqlens = seqstarts[1:] - seqstarts[:-1]
         for b, seqlen in enumerate(seqlens):
             position = start_pos[b]
@@ -54,6 +61,13 @@ class RotaryPositionEmbedding(torch.autograd.Function):
             seqend = seqstarts[b+1]
             # generate cos cache, sin cache
             t = torch.arange(position, position + seqlen, dtype=torch.float, device=query.device)
+            if rope_scaling_type == 'linear':
+                t = t / rope_scaling_factor
+            if rope_scaling_type == 'dynamic' and seqlen > max_position_embeddings:
+                theta = theta * (
+                    (rope_scaling_factor * seqlen / max_position_embeddings) - (rope_scaling_factor - 1)
+                ) ** (dim / (dim - 2))
+            freqs = (1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float, device=query.device)[: (dim // 2)] / dim)))
             freqs_cis = torch.outer(t, freqs)
 
             cos, sin = freqs_cis.cos().unsqueeze(1), freqs_cis.sin().unsqueeze(1)  # (seqlen, 1, dim / 2)
@@ -64,27 +78,37 @@ class RotaryPositionEmbedding(torch.autograd.Function):
         return rotated_query, rotated_key
 
 
-def rotary_position_embedding(query: torch.Tensor, key: torch.Tensor, 
+def rotary_position_embedding(query: torch.Tensor, key: torch.Tensor,
                 seqstarts: torch.Tensor, start_pos: torch.Tensor,
                 max_seqlen: torch.Tensor, rotary_dim: int = 0,
-                theta: float = 10000.0, bypass_key: bool = False) -> torch.Tensor:
-    return RotaryPositionEmbedding.apply(query, key, seqstarts, start_pos, max_seqlen, rotary_dim, theta, bypass_key)
+                theta: float = 10000.0, bypass_key: bool = False,
+                max_position_embeddings: int = 2048, rope_scaling_type: str = '',
+                rope_scaling_factor: float = 1.0) -> torch.Tensor:
+    return RotaryPositionEmbedding.apply(query, key, seqstarts, start_pos, max_seqlen, rotary_dim, theta, bypass_key,
+                                         max_position_embeddings, rope_scaling_type, rope_scaling_factor)
 
 
 if __name__ == "__main__":
     class TestRotaryModule(torch.nn.Module):
-        def __init__(self, rotary_dim: int = 0, theta: float = 10000.0, bypass_key: bool = False) -> None:
+        def __init__(self, rotary_dim: int = 0, theta: float = 10000.0, bypass_key: bool = False,
+                     max_position_embeddings: int = 2048, rope_scaling_type: str = '',
+                     rope_scaling_factor: float = 1.0) -> None:
             super().__init__()
             self.rotary_dim = rotary_dim
             self.theta = theta
             self.bypass_key = bypass_key
+            self.max_position_embeddings = max_position_embeddings
+            self.rope_scaling_type = rope_scaling_type
+            self.rope_scaling_factor = rope_scaling_factor
 
 
-        def forward(self, query: torch.Tensor, key: torch.Tensor, 
+        def forward(self, query: torch.Tensor, key: torch.Tensor,
                 seqstarts: torch.Tensor, start_pos: torch.Tensor,
                 max_seqlen: torch.Tensor):
             return rotary_position_embedding(query, key, seqstarts, start_pos, max_seqlen,
-                                    self.rotary_dim, self.theta, self.bypass_key)
+                                    self.rotary_dim, self.theta, self.bypass_key,
+                                    self.max_position_embeddings, self.rope_scaling_type,
+                                    self.rope_scaling_factor)
 
 
     bs = 2

@@ -70,6 +70,11 @@ class Attention(nn.Module):
         self.fused_kvcache = fused_kvcache
         self.auto_causal = args.auto_causal
 
+        self.rope_theta = args.rope_theta
+        self.rope_scaling_type = args.rope_scaling_type
+        self.rope_scaling_factor = args.rope_scaling_factor
+        self.max_position_embeddings = args.max_position_embeddings
+
         if self.fused_qkv:
             self.wqkv = ColumnParallelLinear(
                 proc_group, args.hidden_dim, args.hidden_dim + 2 * self.num_kv_heads * self.head_dim,
@@ -113,8 +118,11 @@ class Attention(nn.Module):
 
         xq, xk = PMX.dynamic_batching.rotary_position_embedding(
                                         xq, xk, seqstarts,
-                                        start_pos, max_seqlen, 
-                                        self.rotary_dim)
+                                        start_pos, max_seqlen,
+                                        self.rotary_dim,
+                                        max_position_embeddings=self.max_position_embeddings,
+                                        theta=self.rope_theta, rope_scaling_type=self.rope_scaling_type,
+                                        rope_scaling_factor=self.rope_scaling_factor)
         # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
@@ -227,7 +235,7 @@ class TransformerBlock(nn.Module):
                                    attn_wo_bias_term,
                                    rotary_dim=rotary_dim,
                                    proc_group=proc_group)
-        self.feed_forward = FeedForward(args, 
+        self.feed_forward = FeedForward(args,
                                         layer_id,
                                         ffn_linear_bias_term,
                                         proc_group=proc_group)
@@ -343,7 +351,7 @@ class Transformer(nn.Module):
         output = output.float()
         # TensorDumper.dump(output, "logits")
         return output
-    
+
 
     @torch.no_grad()
     def load_state_dict(self, state_dict: Mapping[str, Any]):
@@ -384,7 +392,7 @@ class Transformer(nn.Module):
                         print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
             except AttributeError as e:
                 raise Exception(f'Failed to inject model weight {key}, can not find corresponding layer.')
-        
+
         for key in state_dict:
             if key not in loaded_params:
                 print(f'{key} is not loaded.')

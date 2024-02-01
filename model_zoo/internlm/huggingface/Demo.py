@@ -43,7 +43,7 @@ def main(
         fused_qkv, fused_kvcache, auto_causal,
         quantized_cache, cache_layout,
         cache_mode, dynamic_batching,
-        True, True, False, False,
+        False, False, False, False,
         0, dump_tensor_path, dump_steps
     )
 
