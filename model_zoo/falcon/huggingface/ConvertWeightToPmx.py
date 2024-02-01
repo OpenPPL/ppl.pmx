@@ -61,22 +61,23 @@ def write_pmx_model(model_path, input_base_path):
     pmx_params_dict['hidden_dim'] = params['hidden_size']
     pmx_params_dict['num_heads'] = params['num_attention_heads']
     pmx_params_dict['num_layers'] = params['num_hidden_layers']
-    pmx_params_dict['norm_eps'] = params['rms_norm_eps']
+    pmx_params_dict['norm_eps'] = params['layer_norm_epsilon']
     pmx_params_dict['vocab_size'] = params['vocab_size']
-    pmx_params_dict['num_kv_heads'] = params.get('num_key_value_heads', params['num_attention_heads'])
+    # params['new_decoder_architecture']==True use GQA
+    # params['multi_query']==True use MQA
+    pmx_params_dict['num_kv_heads'] = params['num_kv_heads'] if params['new_decoder_architecture'] or not params['multi_query'] else 1
 
     # compute intermediate_size
     hidden_dim = pmx_params_dict['hidden_dim']
     multiple_of = params.get("multiple_of", 256)
-    ffn_dim_multiplier = params.get("ffn_dim_multiplier", 1)
-    pmx_params_dict['intermediate_dim'] = compute_intermediate_size(hidden_dim, ffn_dim_multiplier, multiple_of)
+    pmx_params_dict['intermediate_dim'] = 4 * hidden_dim
     write_json(pmx_params_dict, os.path.join(model_path, "pmx_params.json"))
 
     # TO DO: GQA / MQA, only test on llama
     num_heads = pmx_params_dict['num_heads']
     num_kv_heads = pmx_params_dict['num_kv_heads']
-    key_value_dim = pmx_params_dict['hidden_dim']
     dims_per_head = hidden_dim // num_heads
+    key_value_dim = dims_per_head * num_kv_heads
 
     # load weights
     def unpermute(w, n_heads=num_heads, dim1=hidden_dim, dim2=hidden_dim):
@@ -87,30 +88,27 @@ def write_pmx_model(model_path, input_base_path):
         hf_model_state_dict.update(torch.load(ckpt_path, map_location="cpu"))
 
     for layer_i in range(pmx_params_dict['num_layers']):
+        split_dim = [head * dims_per_head for head in [num_heads, num_kv_heads, num_kv_heads]]
+        wq, wk, wv = hf_model_state_dict[f"transformer.h.{layer_i}.self_attention.query_key_value.weight"].split(split_dim, dim=0)
 
-        wq = unpermute(hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"])
-        wk = unpermute(hf_model_state_dict[f"model.layers.{layer_i}.self_attn.k_proj.weight"], num_kv_heads, key_value_dim, hidden_dim)
-        wv = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.v_proj.weight"]
+        wq = unpermute(wq)
+        wk = unpermute(wk, num_kv_heads, key_value_dim, hidden_dim)
 
         state_dict.update({
             f"layers.{layer_i}.attention.wq.weight": wq,
             f"layers.{layer_i}.attention.wk.weight": wk,
             f"layers.{layer_i}.attention.wv.weight": wv,
-            f"layers.{layer_i}.attention.wq.bias": hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_proj.bias"],
-            f"layers.{layer_i}.attention.wk.bias": hf_model_state_dict[f"model.layers.{layer_i}.self_attn.k_proj.bias"],
-            f"layers.{layer_i}.attention.wv.bias": hf_model_state_dict[f"model.layers.{layer_i}.self_attn.v_proj.bias"],
-            f"layers.{layer_i}.attention.wo.weight": hf_model_state_dict[f"model.layers.{layer_i}.self_attn.o_proj.weight"],
-            f"layers.{layer_i}.attention.wo.bias": hf_model_state_dict[f"model.layers.{layer_i}.self_attn.o_proj.bias"],
-            f"layers.{layer_i}.feed_forward.w1.weight": hf_model_state_dict[f"model.layers.{layer_i}.mlp.gate_proj.weight"],
-            f"layers.{layer_i}.feed_forward.w2.weight": hf_model_state_dict[f"model.layers.{layer_i}.mlp.down_proj.weight"],
-            f"layers.{layer_i}.feed_forward.w3.weight": hf_model_state_dict[f"model.layers.{layer_i}.mlp.up_proj.weight"],
-            f"layers.{layer_i}.attention_norm.weight": hf_model_state_dict[f"model.layers.{layer_i}.input_layernorm.weight"],
-            f"layers.{layer_i}.ffn_norm.weight": hf_model_state_dict[f"model.layers.{layer_i}.post_attention_layernorm.weight"],
+            f"layers.{layer_i}.attention.wo.weight": hf_model_state_dict[f"transformer.h.{layer_i}.self_attention.dense.weight"],
+            f"layers.{layer_i}.feed_forward.w1.weight": hf_model_state_dict[f"transformer.h.{layer_i}.mlp.dense_h_to_4h.weight"],
+            f"layers.{layer_i}.feed_forward.w2.weight": hf_model_state_dict[f"transformer.h.{layer_i}.mlp.dense_4h_to_h.weight"],
+            f"layers.{layer_i}.attention_norm.weight": hf_model_state_dict[f"transformer.h.{layer_i}.input_layernorm.weight"],
+            f"layers.{layer_i}.attention_norm.bias": hf_model_state_dict[f"transformer.h.{layer_i}.input_layernorm.bias"],
         })
 
     state_dict.update({
-        "tok_embeddings.weight": hf_model_state_dict["model.embed_tokens.weight"],
-        "norm.weight": hf_model_state_dict["model.norm.weight"],
+        "tok_embeddings.weight": hf_model_state_dict["transformer.word_embeddings.weight"],
+        "norm.weight": hf_model_state_dict["transformer.ln_f.weight"],
+        'norm.bias': hf_model_state_dict["transformer.ln_f.bias"],
         "output.weight": hf_model_state_dict["lm_head.weight"]
     })
     torch.save(state_dict, os.path.join(model_path, "model.pth"))

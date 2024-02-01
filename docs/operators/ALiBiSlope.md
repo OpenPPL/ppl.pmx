@@ -40,21 +40,12 @@ def get_slopes(num_heads):
 
 Number of heads
 
-### `data_type`: int
-
-Data type of slopes
-
 ## Inputs
 
 > None
 
 ## Outputs
 
-### `slopes`: tensor(T)
+### `slopes`: tensor(float)
 
 Shape: $(num\\_heads)$
-
-
-## Type Constraints
-
-### `T`: float32, float16

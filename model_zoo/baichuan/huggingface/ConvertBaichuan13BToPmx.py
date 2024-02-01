@@ -69,10 +69,10 @@ def write_pmx_model(model_path, input_base_path):
     hidden_dim = pmx_params_dict['hidden_dim']
     multiple_of = params.get("multiple_of", 256)
     ffn_dim_multiplier = params.get("ffn_dim_multiplier", 1)
-
-    #pmx_params_dict['intermediate_dim'] = compute_intermediate_size(hidden_dim, ffn_dim_multiplier, multiple_of)
-    # some bugs with compute_intermediate_size
-    pmx_params_dict['intermediate_dim'] = params['intermediate_size']
+    if "intermediate_size" in params.keys():
+        pmx_params_dict['intermediate_dim'] = params.get("intermediate_size")
+    else:
+        pmx_params_dict['intermediate_dim'] = compute_intermediate_size(hidden_dim, ffn_dim_multiplier, multiple_of)
     write_json(pmx_params_dict, os.path.join(model_path, "pmx_params.json"))
 
     # TO DO: GQA / MQA, only test on llama

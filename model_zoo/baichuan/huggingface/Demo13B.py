@@ -24,11 +24,12 @@ def main(
     friendly_gqa: bool = False, # done gqa by repeating key and value by key_value_cache op
     fused_qkv: bool = True, # fuse qkv linear
     fused_kvcache: bool = True, # fuse key_value_cache and multi_head_attention
+    fused_ffn_glu: bool = True, # fuse feed forward gate linear unit
     auto_causal: bool = True, # causal mask is auto done by attention op, no need to pass additional mask to the model
     quantized_cache: bool = True, # 8bit kv cache quantization
     cache_layout: int = 0, # change kv cache layout for hardware performance friendly
     cache_mode: int = 0, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
-    dynamic_batching: bool = False, # use dynamic batching scheduling
+    dynamic_batching: bool = True, # use dynamic batching scheduling
     dump_tensor_path: str = None,
     dump_steps: List[int] = []
 ):
@@ -40,8 +41,8 @@ def main(
 
     generator = Loader.load(
         ckpt_dir, params, friendly_gqa,
-        fused_qkv, fused_kvcache, auto_causal,
-        quantized_cache, cache_layout,
+        fused_qkv, fused_kvcache, fused_ffn_glu,
+        auto_causal, quantized_cache, cache_layout,
         cache_mode, dynamic_batching,
         False, False, False,
         dump_tensor_path, dump_steps

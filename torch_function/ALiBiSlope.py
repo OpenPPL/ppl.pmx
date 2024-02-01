@@ -2,25 +2,19 @@ import torch
 import math
 
 
-torch2onnx_dtype = {torch.float16: 10,
-                    torch.float32: 1}
-
-
 class ALiBiSlope(torch.autograd.Function):
     @staticmethod
-    def symbolic(g, num_heads: int, data_type: torch.dtype):
-        data_type_onnx = torch2onnx_dtype[data_type]
+    def symbolic(g, num_heads: int):
         slopes = g.op('pmx::ALiBiSlope',
-                        num_heads_i = num_heads,
-                        data_type_i = data_type_onnx)
+                        num_heads_i = num_heads)
         return slopes
 
 
     @staticmethod
-    def forward(ctx, num_heads: int, data_type: torch.dtype):
+    def forward(ctx, num_heads: int):
 
         if torch.onnx.is_in_onnx_export():
-            return torch.zeros((num_heads), dtype=data_type)
+            return torch.zeros((num_heads), dtype=torch.float32)
 
 
         def get_slopes(heads):
@@ -33,29 +27,27 @@ class ALiBiSlope(torch.autograd.Function):
                     tmp.append(2**(-4 * n / closest_power_of_2))
             return tmp
 
-        return torch.tensor(get_slopes(num_heads), dtype=data_type)
+        return torch.tensor(get_slopes(num_heads), dtype=torch.float32)
 
 
-def alibi_slope(num_heads: int, data_type: torch.dtype):
-    return ALiBiSlope.apply(num_heads, data_type)
+def alibi_slope(num_heads: int):
+    return ALiBiSlope.apply(num_heads)
 
 
 if __name__ == "__main__":
     class TestALiBiModule(torch.nn.Module):
-        def __init__(self, num_heads: int, data_type: torch.dtype):
+        def __init__(self, num_heads: int):
             super().__init__()
             self.num_heads = num_heads
-            self.data_type = data_type
 
 
         def forward(self):
-            return alibi_slope(self.num_heads, self.data_type)
+            return alibi_slope(self.num_heads)
 
 
     num_heads = 40
-    data_type = torch.float16
 
-    alibi = TestALiBiModule(num_heads, data_type)
+    alibi = TestALiBiModule(num_heads)
 
     res = alibi.forward()
     print(res)

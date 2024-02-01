@@ -10,7 +10,7 @@ For `dynamic_batching.RotaryPositionEmbedding`, start postion and sequence lengt
 
 How many elements in dimension $head\\_dim$ to be rotary, must be even number. Default is `0`, which means all elements should be rotary. Otherwise only rotary $Q_r = Q(:\frac{rotary\\_dim}{2})$.
 
-### `theta`: int(default: 10000)
+### `theta`: float(default: 10000.0)
 
 Hyperameter $\theta$ to adjust rotate angle interval.
 

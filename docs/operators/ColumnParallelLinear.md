@@ -38,13 +38,13 @@ Shape: $(*,K)$, where $∗$ means any number of dimensions including none.
 
 Transformation weight.
 
-Shape: $(N,K)$ or $(N_d,K)$ for each device $d$ when `gather_output` is `False`. 
+Shape: $(N,K)$ or $(N_d,K)$ for each device $d$ when $TPsize > 1$. 
 
 ### `B`(constant, optional): tensor(T2)
 
 Transformation bias.
 
-Shape: $(N)$ or $(N_d)$ for each device $d$ when `gather_output` is `False`. 
+Shape: $(N)$ or $(N_d)$ for each device $d$ when $TPsize > 1$. 
 
 ## Outputs
 

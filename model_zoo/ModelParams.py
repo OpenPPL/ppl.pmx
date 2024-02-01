@@ -21,12 +21,11 @@ class ModelParams:
 
     dynamic_batching: bool = True
     auto_causal: bool = True
-
+    
     rope_theta: float = 10000.0
     max_position_embeddings: int = 2048
     rope_scaling_type: str = '' # '', 'dynamic', 'linear'
     rope_scaling_factor: float = 1.0
-
 
     num_experts: int = 1
     num_experts_per_token: int = 1

@@ -185,29 +185,41 @@ class FeedForward(nn.Module):
         self,
         args: ModelParams,
         layer_id: int,
+        fused_ffn_glu: bool,
         linear_bias_term: bool,
         proc_group: dist.ProcessGroup
     ):
         super().__init__()
         self.layer_id = layer_id
+        self.fused_ffn_glu = fused_ffn_glu
 
-        self.w1 = ColumnParallelLinear(
-            proc_group, args.hidden_dim, args.intermediate_dim,
-            bias_term=linear_bias_term, gather_output=False)
+        if self.fused_ffn_glu:
+            self.wu = ColumnParallelLinear(
+                proc_group, args.hidden_dim, 2 * args.intermediate_dim,
+                bias_term=linear_bias_term, gather_output=False)
+        else:
+            self.w1 = ColumnParallelLinear(
+                proc_group, args.hidden_dim, args.intermediate_dim,
+                bias_term=linear_bias_term, gather_output=False)
+            self.w3 = ColumnParallelLinear(
+                proc_group, args.hidden_dim, args.intermediate_dim,
+                bias_term=linear_bias_term, gather_output=False)
         self.w2 = RowParallelLinear(
             proc_group, args.intermediate_dim, args.hidden_dim,
             bias_term=linear_bias_term, input_is_parallel=True)
-        self.w3 = ColumnParallelLinear(
-            proc_group, args.hidden_dim, args.intermediate_dim,
-            bias_term=linear_bias_term, gather_output=False)
 
 
     def forward(self, x):
-        x1 = self.w1(x)
-        # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
-        x3 = self.w3(x)
-        # TensorDumper.dump(x3, "layer{}_ffn_w3".format(self.layer_id))
-        x13 = PMX.silu(x1, x3)
+        if self.fused_ffn_glu:
+            x13 = self.wu(x)
+            # TensorDumper.dump(x13, "layer{}_ffn_wu".format(self.layer_id))
+            x13 = PMX.swiglu(x13)
+        else:
+            x1 = self.w1(x)
+            # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
+            x3 = self.w3(x)
+            # TensorDumper.dump(x3, "layer{}_ffn_w3".format(self.layer_id))
+            x13 = PMX.silu(x1, x3)
         # TensorDumper.dump(x13, "layer{}_ffn_mul_silu".format(self.layer_id))
         output = self.w2(x13)
         # TensorDumper.dump(output, "layer{}_ffn_w2".format(self.layer_id))
@@ -220,6 +232,7 @@ class TransformerBlock(nn.Module):
                  friendly_gqa: bool,
                  fused_qkv: bool,
                  fused_kvcache: bool,
+                 fused_ffn_glu: bool,
                  attn_wqkv_bias_term: bool,
                  attn_wo_bias_term: bool,
                  ffn_linear_bias_term: bool,
@@ -237,6 +250,7 @@ class TransformerBlock(nn.Module):
                                    proc_group=proc_group)
         self.feed_forward = FeedForward(args,
                                         layer_id,
+                                        fused_ffn_glu,
                                         ffn_linear_bias_term,
                                         proc_group=proc_group)
 
@@ -269,6 +283,7 @@ class Transformer(nn.Module):
                  friendly_gqa: bool,
                  fused_qkv: bool,
                  fused_kvcache: bool,
+                 fused_ffn_glu: bool,
                  attn_wqkv_bias_term: bool,
                  attn_wo_bias_term: bool,
                  ffn_linear_bias_term: bool,
@@ -281,6 +296,7 @@ class Transformer(nn.Module):
         self.proc_group = proc_group
         self.fused_qkv = fused_qkv
         self.fused_kvcache = fused_kvcache
+        self.fused_ffn_glu = fused_ffn_glu
 
         world_size = 1 if proc_group is None else proc_group.size()
         num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
@@ -289,6 +305,7 @@ class Transformer(nn.Module):
         head_dim = params.hidden_dim // params.num_heads
         self.local_q_dim = num_local_heads * head_dim
         self.local_kv_dim = num_local_kv_heads * head_dim
+        self.local_imm_dim = params.intermediate_dim // world_size 
 
         self.tok_embeddings = ParallelEmbedding(proc_group, params.vocab_size, params.hidden_dim)
 
@@ -299,6 +316,7 @@ class Transformer(nn.Module):
                 friendly_gqa,
                 fused_qkv,
                 fused_kvcache,
+                fused_ffn_glu,
                 attn_wqkv_bias_term,
                 attn_wo_bias_term,
                 ffn_linear_bias_term,
@@ -319,22 +337,22 @@ class Transformer(nn.Module):
         # TensorDumper.dump(h, "emb_out")
 
         _kv_scale = kv_scale
-        # TensorDumper.dump(tokens, "token_ids")
-        # if attn_mask is not None:
-        #     TensorDumper.dump(attn_mask, "attn_mask")
+        TensorDumper.dump(tokens, "token_ids")
+        if attn_mask is not None:
+            TensorDumper.dump(attn_mask, "attn_mask")
         if self.fused_kvcache and attn_mask is not None:
             if kv_scale is None: # mount an empty scale for friendly exporting
                 _kv_scale = torch.empty(0, dtype=h.dtype)
-        # TensorDumper.dump(seqstarts, "seqstarts")
-        # TensorDumper.dump(kvstarts, "kvstarts")
-        # TensorDumper.dump(cachestarts, "cachestarts")
-        # TensorDumper.dump(decoding_batches, "decoding_batches")
-        # TensorDumper.dump(start_pos, "start_pos")
-        # TensorDumper.dump(max_seqlen, "max_seqlen")
-        # TensorDumper.dump(max_kvlen, "max_kvlen")
-        # TensorDumper.dump(kv_cache, "kv_cache")
-        # if kv_scale is not None:
-        #     TensorDumper.dump(kv_scale, "kv_scale")
+        TensorDumper.dump(seqstarts, "seqstarts")
+        TensorDumper.dump(kvstarts, "kvstarts")
+        TensorDumper.dump(cachestarts, "cachestarts")
+        TensorDumper.dump(decoding_batches, "decoding_batches")
+        TensorDumper.dump(start_pos, "start_pos")
+        TensorDumper.dump(max_seqlen, "max_seqlen")
+        TensorDumper.dump(max_kvlen, "max_kvlen")
+        TensorDumper.dump(kv_cache, "kv_cache")
+        if kv_scale is not None:
+            TensorDumper.dump(kv_scale, "kv_scale")
 
         norm = None
         for layer in self.layers:
@@ -349,7 +367,7 @@ class Transformer(nn.Module):
         output = self.output(gathered_h)  # only compute last logits
         # TensorDumper.dump(output, "logits_before_cast")
         output = output.float()
-        # TensorDumper.dump(output, "logits")
+        TensorDumper.dump(output, "logits")
         return output
 
 
@@ -388,6 +406,21 @@ class Transformer(nn.Module):
                         self.get_submodule(module_name)._parameters[param_name][
                             self.local_q_dim + self.local_kv_dim:
                             self.local_q_dim + self.local_kv_dim * 2] = value
+                        replaced_key = module_name + '.' + param_name
+                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                if self.fused_ffn_glu:
+                    if 'feed_forward.w1' in key:
+                        loaded_params.add(key)
+                        module_name = module_name.replace('w1', 'wu')
+                        self.get_submodule(module_name)._parameters[param_name][
+                            :self.local_imm_dim] = value
+                        replaced_key = module_name + '.' + param_name
+                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                    if 'feed_forward.w3' in key:
+                        loaded_params.add(key)
+                        module_name = module_name.replace('w3', 'wu')
+                        self.get_submodule(module_name)._parameters[param_name][
+                            self.local_imm_dim:] = value
                         replaced_key = module_name + '.' + param_name
                         print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
             except AttributeError as e:
