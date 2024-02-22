@@ -19,6 +19,7 @@ import shutil
 import warnings
 
 import torch
+from safetensors import safe_open
 
 from pathlib import Path
 
@@ -51,7 +52,7 @@ def write_json(text, path):
         json.dump(text, f)
 
 
-def write_pmx_model(model_path, input_base_path):
+def write_pmx_model(model_path, input_base_path, model_type):
     os.makedirs(model_path, exist_ok=True)
     print ("Loading the checkpoint in a HF model")
 
@@ -86,8 +87,16 @@ def write_pmx_model(model_path, input_base_path):
         return w.view(n_heads, 2, dim1 // n_heads // 2, dim2).transpose(1, 2).reshape(dim1, dim2)
 
     hf_model_state_dict, state_dict = {}, {}
-    for ckpt_path in sorted(Path(input_base_path).glob("*.bin")):
-        hf_model_state_dict.update(torch.load(ckpt_path, map_location="cpu"))
+    if model_type == "bin":
+        for ckpt_path in sorted(Path(input_base_path).glob("*.bin")):
+            hf_model_state_dict.update(torch.load(ckpt_path, map_location="cpu"))
+    elif model_type == "safetensors":
+        for ckpt_path in sorted(Path(input_base_path).glob("*.safetensors")):
+            weights = safe_open(ckpt_path, 'pt', 'cpu')
+            weights = {k: weights.get_tensor(k) for k in weights.keys()}
+            hf_model_state_dict.update(weights)
+    else:
+        raise ValueError(f"Not support the model_type: {model_type}.")
 
     for layer_i in range(pmx_params_dict['num_layers']):
 
@@ -125,10 +134,17 @@ def main():
         "--output_dir",
         help="Location to write PMX model",
     )
+    parser.add_argument(
+        "--model_type",
+        choices=["bin", "safetensors"],
+        default="bin",
+        help="Input model type",
+    )
     args = parser.parse_args()
     write_pmx_model(
         model_path=args.output_dir,
-        input_base_path=args.input_dir
+        input_base_path=args.input_dir,
+        model_type=args.model_type
     )
 
 if __name__ == "__main__":
