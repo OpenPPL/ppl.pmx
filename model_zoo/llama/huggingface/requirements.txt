@@ -5,3 +5,4 @@ sentencepiece==0.1.99
 torch==2.0.1
 torchaudio==2.0.2
 torchvision==0.15.2
+safetensors==0.4.2
