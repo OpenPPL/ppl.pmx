@@ -69,6 +69,11 @@ class Attention(nn.Module):
         self.fused_kvcache = fused_kvcache
         self.auto_causal = args.auto_causal
 
+        self.rope_theta = args.rope_theta
+        self.rope_scaling_type = args.rope_scaling_type
+        self.rope_scaling_factor = args.rope_scaling_factor
+        self.max_position_embeddings = args.max_position_embeddings
+
         if self.fused_qkv:
             self.wqkv = ColumnParallelLinear(
                 proc_group, args.hidden_dim, args.hidden_dim + 2 * self.num_kv_heads * self.head_dim,
@@ -93,6 +98,8 @@ class Attention(nn.Module):
         expanded_shape = (0, 0, -1, self.head_dim)
         if self.fused_qkv:
             xqkv = self.wqkv(x)
+            #import ipdb;ipdb.set_trace()
+
             xqkv = PMX.reshape(xqkv, expanded_shape)
             # TensorDumper.dump(xqkv, "layer{}_reshaped_xqkv".format(self.layer_id))
             split_size = (self.num_local_heads, self.num_local_kv_heads, self.num_local_kv_heads)
@@ -106,7 +113,11 @@ class Attention(nn.Module):
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
-        xq, xk = PMX.rotary_position_embedding(xq, xk, start_pos, rotary_dim=self.rotary_dim)
+        # xq, xk = PMX.rotary_position_embedding(xq, xk, start_pos, rotary_dim=self.rotary_dim)
+        xq, xk = PMX.rotary_position_embedding(xq, xk, start_pos, rotary_dim=self.rotary_dim,
+                                               max_position_embeddings=self.max_position_embeddings,
+                                               theta=self.rope_theta, rope_scaling_type=self.rope_scaling_type,
+                                               rope_scaling_factor=self.rope_scaling_factor)
         # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
@@ -217,7 +228,7 @@ class TransformerBlock(nn.Module):
                                    attn_wo_bias_term,
                                    rotary_dim=rotary_dim,
                                    proc_group=proc_group)
-        self.feed_forward = FeedForward(args, 
+        self.feed_forward = FeedForward(args,
                                         layer_id,
                                         fused_ffn_glu,
                                         ffn_linear_bias_term,
