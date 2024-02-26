@@ -6,7 +6,8 @@ class RotaryPositionEmbedding(torch.autograd.Function):
     def symbolic(g, query: torch.Value, key: torch.Value,
                 start_pos: torch.Value, pad_len: torch.Value,
                 rotary_dim: int = 0, theta: float = 10000.0,
-                bypass_key: bool = False):
+                bypass_key: bool = False, max_position_embeddings: int = 2048,
+                rope_scaling_type: str = '', rope_scaling_factor: float = 1.0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if pad_len is not None:
             rotated_query, rotated_key = g.op('pmx::RotaryPositionEmbedding',
@@ -14,6 +15,9 @@ class RotaryPositionEmbedding(torch.autograd.Function):
                 rotary_dim_i=rotary_dim,
                 theta_f=theta,
                 bypass_key_i=bypass_key,
+                max_position_embeddings_i=max_position_embeddings,
+                rope_scaling_type_s=rope_scaling_type,
+                rope_scaling_factor_f=rope_scaling_factor,
                 outputs=2)
         else:
             rotated_query, rotated_key = g.op('pmx::RotaryPositionEmbedding',
@@ -21,14 +25,18 @@ class RotaryPositionEmbedding(torch.autograd.Function):
                 rotary_dim_i=rotary_dim,
                 theta_f=theta,
                 bypass_key_i=bypass_key,
+                max_position_embeddings_i=max_position_embeddings,
+                rope_scaling_type_s=rope_scaling_type,
+                rope_scaling_factor_f=rope_scaling_factor,
                 outputs=2)
         return rotated_query.setTypeAs(query), rotated_key.setTypeAs(key)
 
     @staticmethod
-    def forward(ctx, query: torch.Tensor, key: torch.Tensor, 
+    def forward(ctx, query: torch.Tensor, key: torch.Tensor,
                 start_pos: torch.Tensor, pad_len: torch.Tensor = None,
                 rotary_dim: int = 0, theta: float = 10000.0,
-                bypass_key: bool = False):
+                bypass_key: bool = False, max_position_embeddings: int = 2048,
+                rope_scaling_type: str = '', rope_scaling_factor: float = 1.0):
         if torch.onnx.is_in_onnx_export():
             return query, key
 
@@ -40,10 +48,18 @@ class RotaryPositionEmbedding(torch.autograd.Function):
             pad_len = torch.zeros(bs, dtype=start_pos.dtype, device=start_pos.device)
 
         # generate cos cache, sin cache
+        if rope_scaling_type == 'dynamic' and seqlen > max_position_embeddings:
+            theta = theta * (
+                (rope_scaling_factor * seqlen / max_position_embeddings) - (rope_scaling_factor - 1)
+            ) ** (dim / (dim - 2))
+
         freqs = (1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float, device=query.device)[: (dim // 2)] / dim)))
         freqs_cis = torch.zeros(bs, seqlen, dim // 2, dtype=torch.float, device=query.device)
+
         for i in range(bs):
             t = torch.arange(start_pos.item() - pad_len[i], start_pos.item() - pad_len[i] + seqlen, dtype=torch.float, device=query.device)
+            if rope_scaling_type == 'linear':
+                t = t / rope_scaling_factor
             freqs_cis[i] = torch.outer(t, freqs)
 
         cos, sin = freqs_cis.cos().unsqueeze(2), freqs_cis.sin().unsqueeze(2)  # (bs, seqlen, 1, dim / 2)
@@ -59,7 +75,7 @@ class RotaryPositionEmbedding(torch.autograd.Function):
             x_a_embed = x_a * cos - x_b * sin
             x_b_embed = x_b * cos + x_a * sin
             x_embed = torch.cat((x_a_embed, x_b_embed), dim=-1)
-
+            
             x_embed = x_embed.view(*x_embed.shape[:-1], 2, -1).transpose(-2, -1).contiguous().flatten(-2)
             x_embed = torch.cat((x_embed, x_pass), dim=-1)
             return x_embed
@@ -70,29 +86,39 @@ class RotaryPositionEmbedding(torch.autograd.Function):
         return rotated_query, rotated_key
 
 
-def rotary_position_embedding(query: torch.Tensor, key: torch.Tensor, 
+def rotary_position_embedding(query: torch.Tensor, key: torch.Tensor,
                 start_pos: torch.Tensor, pad_len: torch.Tensor = None,
-                rotary_dim: int = 0, theta: float = 10000.0, bypass_key: bool = False) -> torch.Tensor:
-    return RotaryPositionEmbedding.apply(query, key, start_pos, pad_len, rotary_dim, theta, bypass_key)
+                rotary_dim: int = 0, theta: float = 10000.0, bypass_key: bool = False,
+                max_position_embeddings: int = 2048, rope_scaling_type: str = '',
+                rope_scaling_factor: float = 1.0) -> torch.Tensor:
+    return RotaryPositionEmbedding.apply(query, key, start_pos, pad_len, rotary_dim, theta, bypass_key,
+                                         max_position_embeddings, rope_scaling_type, rope_scaling_factor)
 
 
 if __name__ == "__main__":
     class TestRotaryModule(torch.nn.Module):
-        def __init__(self, rotary_dim: int = 0, theta: float = 10000.0, bypass_key: bool = False) -> None:
+        def __init__(self, rotary_dim: int = 0, theta: float = 10000.0, bypass_key: bool = False,
+                     max_position_embeddings: int = 2048, rope_scaling_type: str = '',
+                     rope_scaling_factor: float = 1.0) -> None:
             super().__init__()
             self.rotary_dim = rotary_dim
             self.theta = theta
             self.bypass_key = bypass_key
+            self.max_position_embeddings = max_position_embeddings
+            self.rope_scaling_type = rope_scaling_type
+            self.rope_scaling_factor = rope_scaling_factor
 
 
-        def forward(self, query: torch.Tensor, key: torch.Tensor, 
+        def forward(self, query: torch.Tensor, key: torch.Tensor,
                 start_pos: torch.Tensor, pad_len: torch.Tensor = None):
             return rotary_position_embedding(query, key, start_pos, pad_len,
-                                    self.rotary_dim, self.theta, self.bypass_key)
+                                    self.rotary_dim, self.theta, self.bypass_key,
+                                    self.max_position_embeddings, self.rope_scaling_type,
+                                    self.rope_scaling_factor)
 
 
     bs = 2
-    seqlen = 38
+    seqlen = 1038
     num_head = 32
     head_dim = 128
 
@@ -104,8 +130,9 @@ if __name__ == "__main__":
     k = torch.randn(bs, seqlen, num_head, head_dim)
 
     start_pos = torch.tensor(2)
-    rotary = TestRotaryModule(rotary_dim, theta=theta)
-    
+    # rotary = TestRotaryModule(rotary_dim, theta=theta)
+    rotary = TestRotaryModule(rotary_dim, theta=theta, rope_scaling_type='dynamic', rope_scaling_factor=2.0)
+
     model_str1 = torch.onnx.export_to_pretty_string(
        rotary, (q, k, start_pos), "RotaryPositionEmbedding1.onnx",
        input_names=["query", "key", "start_pos"], output_names=["query_out", "key_out"], opset_version=11)
