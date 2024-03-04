@@ -30,10 +30,12 @@ from .RMSNorm import skip_rms_norm
 
 from .RotaryPositionEmbedding import rotary_position_embedding
 from .Rotary2DPositionEmbedding import rotary_2d_position_embedding
+from .VisionEmbedding import vision_embedding
 
 from .RowParallelLinear import row_parallel_linear
 
 from .SiLU import silu
 from .SwiGLU import swiglu
+from .Swish import swish
 
 from . import dynamic_batching
