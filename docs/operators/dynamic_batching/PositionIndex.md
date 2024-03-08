@@ -1,0 +1,45 @@
+
+# dynamic_batching.PositionIndex
+
+`dynamic_batching.PositionIndex`, uses `seqstarts` to record the sequence begining position of each batch.
+
+Generating tokens' position indeces of each batch $b$, where $begin = start\\_pos[b]$ and $end = begin + seqstarts[b+1]-seqstarts[b]$
+$$ postion\\_idx = (begin, begin + 1, \cdots, end)$$
+
+## Attributes/Parameters
+
+### `max_position_embeddings`: int
+
+Reserved. The maximum sequence length that this model might ever be used with.
+
+## Inputs
+
+### `sequences`: tensor(int64)
+
+input sequences
+
+Shape: `seqstarts[batch]`
+
+### `seqstarts`: tensor(int64)
+
+`seqstarts[:batch]` contains the position of the first token in `sequences` of each batch. And `seqstarts[batch]` contains the total length of `sequences`.
+
+Note that `seqstarts[b+1]-seqstarts[b]` can calculate out the sequence length of batch $b$.
+
+Shape: $(B+1)$
+
+### `start_pos`: tensor(int64)
+
+Sequence position of each batch.
+
+Shape: $(B)$
+
+### `max_seqlen`: scalar(int64)
+
+Maximum sequence length of `sequences`, equal to `max(seqstarts[1:]-seqstarts[:batch])`. For parallel computing.
+
+## Outputs
+
+### `position_idx`: tensor(int64)
+
+Shape: `seqstarts[batch]`

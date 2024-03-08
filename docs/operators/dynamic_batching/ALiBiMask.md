@@ -2,7 +2,7 @@
 # dynamic_batching.ALiBiMask
 
 The original definition of `ALiBi` refers to [here](../ALiBi.md).
-`dynamic_batching.ALiBi`, uses `seqstarts` and `kvstarts` to record the sequence begining position of each batch. The mask is similar to a block diagonal matrix. We generate the mask for each batch and fill it in the corresponding position. The following code shows the calculation process.
+`dynamic_batching.ALiBiMask`, uses `seqstarts` and `kvstarts` to record the sequence begining position of each batch. The mask is similar to a block diagonal matrix. We generate the mask for each batch and fill it in the corresponding position. The following code shows the calculation process.
 
 ```python
 alibi_mask = torch.zeros([seqstarts[-1], kvstarts[-1]], dtype=data_type)
