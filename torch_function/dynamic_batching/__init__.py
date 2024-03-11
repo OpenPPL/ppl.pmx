@@ -9,3 +9,4 @@ from .MultiHeadCacheAttention import multi_head_cache_attention
 
 from .RotaryPositionEmbedding import rotary_position_embedding
 from .Rotary2DPositionEmbedding import rotary_2d_position_embedding
+from .PositionIndex import position_index
