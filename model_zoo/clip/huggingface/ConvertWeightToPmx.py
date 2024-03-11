@@ -85,9 +85,6 @@ def write_pmx_model(model_path, input_base_path):
     dims_per_head = hidden_dim // num_heads
     key_value_dim = dims_per_head * num_kv_heads
 
-    # load weights
-    def unpermute(w, n_heads=num_heads, dim1=hidden_dim, dim2=hidden_dim):
-        return w.view(n_heads, 2, dim1 // n_heads // 2, dim2).transpose(1, 2).reshape(dim1, dim2)
 
     hf_model_state_dict, state_dict = {}, {}
     for ckpt_path in sorted(Path(input_base_path).glob("*.bin")):

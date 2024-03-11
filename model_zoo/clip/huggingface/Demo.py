@@ -36,10 +36,9 @@ def main(
 
     # torch.set_default_tensor_type(torch.cuda.HalfTensor)
     attn_mask = torch.empty(0, dtype=torch.float32)
-    #pixel_values = torch.ones([1,3,224,224], dtype=torch.float32)
+    pixel_values = torch.ones([1,3,224,224], dtype=torch.float32)
 
-    pixel_values = torch.load('test_input.pt')
-
+    # pixel_values = torch.load('test_input.pt')
     #from PIL import Image
     #import requests
     #from transformers import AutoProcessor, CLIPVisionModelWithProjection

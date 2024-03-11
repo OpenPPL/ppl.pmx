@@ -31,8 +31,16 @@ def main(
     # export model
     pixel_values = torch.ones([1, 3, params.image_size, params.image_size], dtype=torch.float32)
     attn_mask = torch.empty(0, dtype=torch.float32)
+    dynamic_axes = {
+        'pixel_values': {
+            0: 'batch'
+        }
+    }
 
-    # to do: dynamic batch / dump json
+    if not os.path.exists(export_path):
+        os.makedirs(export_path)
+
+    # to do: dump json
     torch.onnx.export(
         model.cpu(),
         (pixel_values, attn_mask),
@@ -41,8 +49,11 @@ def main(
         output_names=["vision_logits"],
         do_constant_folding=True,
         opset_version=11,
+        dynamic_axes=dynamic_axes,
     )
 
+    with open(os.path.join(export_path, "params.json"), "w") as f:
+        json.dump(model.params.__dict__, f)
 
 if __name__ == "__main__":
     fire.Fire(main)
