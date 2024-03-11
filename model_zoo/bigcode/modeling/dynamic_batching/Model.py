@@ -17,27 +17,6 @@ from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbed
 TensorDumper = ModelUtils.__TensorDumper__()
 
 
-class PositionIndex(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, sequences: torch.Tensor,
-                seqstarts: torch.Tensor, start_pos: torch.Tensor,
-                max_seqlen: torch.Tensor):
-        return PMX.dynamic_batching.position_index(sequences, seqstarts, start_pos, max_seqlen)
-
-
-class LayerNorm(torch.nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
-        self.bias = torch.nn.Parameter(torch.zeros(dim))
-
-    def forward(self, x):
-        return PMX.layer_norm(x, self.weight, self.bias, -1, self.eps)
-
-
 class SkipLayerNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
@@ -288,7 +267,6 @@ class Transformer(nn.Module):
 
         self.tok_embeddings = ParallelEmbedding(proc_group, params.vocab_size, params.hidden_dim)
         self.pos_embeddings = ParallelEmbedding(proc_group, params.max_position_embeddings, params.hidden_dim)
-        self.position_index = PositionIndex()
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.num_layers):
@@ -316,13 +294,13 @@ class Transformer(nn.Module):
                 max_seqlen: torch.Tensor,  max_kvlen: torch.Tensor,
                 kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
 
-        pos_idx = self.position_index(tokens, seqstarts, start_pos, max_seqlen)
+        pos_idx = PMX.dynamic_batching.position_index(
+            tokens, seqstarts, start_pos, max_seqlen)
         h = self.tok_embeddings(tokens) + self.pos_embeddings(pos_idx)
         # TensorDumper.dump(h, "emb_out")
 
         _kv_scale = kv_scale
         TensorDumper.dump(tokens, "token_ids")
-        TensorDumper.dump(pos_idx, "pos_idx")
         if attn_mask is not None:
             TensorDumper.dump(attn_mask, "attn_mask")
         if self.fused_kvcache and attn_mask is not None:
@@ -392,21 +370,6 @@ class Transformer(nn.Module):
                         self.get_submodule(module_name)._parameters[param_name][
                             self.local_q_dim + self.local_kv_dim:
                             self.local_q_dim + self.local_kv_dim * 2] = value
-                        replaced_key = module_name + '.' + param_name
-                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
-                if self.fused_ffn_glu:
-                    if 'feed_forward.w1' in key:
-                        loaded_params.add(key)
-                        module_name = module_name.replace('w1', 'wu')
-                        self.get_submodule(module_name)._parameters[param_name][
-                            :self.local_imm_dim] = value
-                        replaced_key = module_name + '.' + param_name
-                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
-                    if 'feed_forward.w3' in key:
-                        loaded_params.add(key)
-                        module_name = module_name.replace('w3', 'wu')
-                        self.get_submodule(module_name)._parameters[param_name][
-                            self.local_imm_dim:] = value
                         replaced_key = module_name + '.' + param_name
                         print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
             except AttributeError as e:

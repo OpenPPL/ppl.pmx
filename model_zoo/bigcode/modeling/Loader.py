@@ -43,10 +43,7 @@ def load(
         if cache_layout != 3:
             print("Info: we suggest using cache_layout 3 for cuda inference performance")
     else:
-        from bigcode.modeling.static_batching.Model import TensorDumper, Transformer
-        from bigcode.modeling.static_batching.Pipeline import BigCode
-        if cache_mode:
-            print("Warning: cache_mode only affected when dynamic_batching == True")
+        assert("Error: only support dynamic_batching == True")
 
     local_rank, world_size = ModelParallel.setup(load_to_cpu)
     if local_rank > 0:
