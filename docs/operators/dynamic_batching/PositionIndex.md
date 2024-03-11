@@ -6,12 +6,6 @@
 Generating tokens' position indeces of each batch $b$, where $begin = start\\_pos[b]$ and $end = begin + seqstarts[b+1]-seqstarts[b]$
 $$ postion\\_idx = (begin, begin + 1, \cdots, end)$$
 
-## Attributes/Parameters
-
-### `max_position_embeddings`: int
-
-Reserved. The maximum sequence length that this model might ever be used with.
-
 ## Inputs
 
 ### `sequences`: tensor(int64)
