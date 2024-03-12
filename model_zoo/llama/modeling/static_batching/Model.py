@@ -116,8 +116,8 @@ class Attention(nn.Module):
 
         xq, xk = PMX.rotary_position_embedding(xq, xk, start_pos, rotary_dim=self.rotary_dim,
                                                max_position_embeddings=self.max_position_embeddings,
-                                               theta=self.rope_theta, rope_scaling_type=self.rope_scaling_type,
-                                               rope_scaling_factor=self.rope_scaling_factor)
+                                               theta=self.rope_theta, scaling_type=self.rope_scaling_type,
+                                               scaling_factor=self.rope_scaling_factor)
         # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
