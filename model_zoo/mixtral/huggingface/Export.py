@@ -18,12 +18,12 @@ def main(
     fused_qkv: bool = True, # fuse qkv linear
     fused_kvcache: bool = True, # fuse key_value_cache and multi_head_attention
     fused_ffn_glu: bool = True, # fuse feed forward gate linear unit
+    auto_causal: bool = True, # causal mask is auto done by attention op, no need to pass additional mask to the model
     quantized_cache: bool = True, # 8bit kv cache quantization
     cache_layout: int = 0, # change kv cache layout for hardware performance friendly
     cache_mode: int = 0, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
     dynamic_batching: bool = True, # use dynamic batching scheduling
 ):
-    auto_causal = True
     with open(Path(ckpt_dir) / "pmx_params.json", "r") as f:
         params = json.loads(f.read())
     params: ModelParams = ModelParams(**params)

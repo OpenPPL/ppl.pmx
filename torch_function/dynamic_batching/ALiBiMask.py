@@ -78,11 +78,8 @@ class ALiBiMask(torch.autograd.Function):
             assert len(attention_mask.shape) == 2 or len(attention_mask.shape) == 3
             if len(attention_mask.shape) == 2:
                 attention_mask = attention_mask.unsqueeze(0).expand(num_heads, -1, -1)
-                alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
-                                            + attention_mask[..., :last_dim])
-            if len(attention_mask.shape) == 3:
-                alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
-                                            + attention_mask[..., :last_dim])
+            alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
+                                        + attention_mask[..., :last_dim])
         return alibi_mask
 
 

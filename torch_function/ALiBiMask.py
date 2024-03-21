@@ -67,15 +67,13 @@ class ALiBiMask(torch.autograd.Function):
         alibi_mask = slopes.unsqueeze(1).unsqueeze(1) * alibi_mask
 
         if attention_mask is not None and attention_mask.numel() > 0:
-            assert len(attention_mask.shape) == 2 or len(attention_mask.shape) == 4
+            assert len(attention_mask.shape) == 2 or len(attention_mask.shape) == 3 or len(attention_mask.shape) == 4
             if len(attention_mask.shape) == 2:
                 attention_mask = attention_mask.unsqueeze(0).expand(num_heads, -1, -1)
-                alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
-                                              + attention_mask[..., :last_dim])
             if len(attention_mask.shape) == 4:
                 batch = attention_mask.shape[0]
-                alibi_mask = alibi_mask.unsqueeze(0).expand(batch, -1, -1, -1)
-                alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
+                alibi_mask = alibi_mask.unsqueeze(0).expand(batch, -1, -1, -1).clone()
+            alibi_mask[..., :last_dim] = (alibi_mask[..., :last_dim].to(attention_mask[..., :last_dim])
                                               + attention_mask[..., :last_dim])
         return alibi_mask
 

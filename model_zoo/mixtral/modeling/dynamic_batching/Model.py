@@ -186,8 +186,13 @@ class MoeFeedForward(nn.Module):
 
     def forward(self, x):
         router_logits = self.gate(x)
+        # TensorDumper.dump(router_logits, "layer{}_ffn_gate_score".format(self.layer_id))
 
         x_experts, expert_weights, invert_permutation, expert_offset = PMX.moe_select(x, router_logits, self.num_experts, self.num_experts_per_token)
+        # TensorDumper.dump(x_experts, "layer{}_ffn_moe_expanded_x".format(self.layer_id))
+        # TensorDumper.dump(expert_weights, "layer{}_ffn_moe_expert_weights".format(self.layer_id))
+        # TensorDumper.dump(invert_permutation, "layer{}_ffn_moe_inv_perm".format(self.layer_id))
+        # TensorDumper.dump(expert_offset, "layer{}_ffn_moe_expert_offset".format(self.layer_id))
 
         if self.fused_ffn_glu:
             x13 = self.wu(x_experts, expert_offset)
