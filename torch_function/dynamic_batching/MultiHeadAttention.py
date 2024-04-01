@@ -8,8 +8,10 @@ class MultiHeadAttention(torch.autograd.Function):
     def symbolic(g, query: torch.Value, key: torch.Value, value: torch.Value,
                  seqstarts: torch.Value, kvstarts: torch.Value, decoding_batches: torch.Value,
                  max_seqlen: torch.Value, max_kvlen: torch.Value,
-                 attn_mask: Optional[torch.Value], num_heads: int, head_dim: int,
-                 is_causal: bool = True, num_kv_heads: int = 0):
+                 attn_mask: Optional[torch.Value],
+                 num_heads: int, head_dim: int,
+                 is_causal: bool = True, is_alibi: bool = False, 
+                 num_kv_heads: int = 0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if attn_mask is not None:
             output = g.op('pmx.dynamic_batching::MultiHeadAttention',
@@ -19,6 +21,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 num_heads_i=num_heads,
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
+                is_alibi_i=is_alibi,
                 num_kv_heads_i=num_kv_heads)
         else:
             output = g.op('pmx.dynamic_batching::MultiHeadAttention',
@@ -28,6 +31,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 num_heads_i=num_heads,
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
+                is_alibi_i=is_alibi,
                 num_kv_heads_i=num_kv_heads)
         return output.setTypeAs(query)
 
@@ -36,8 +40,10 @@ class MultiHeadAttention(torch.autograd.Function):
     def forward(ctx, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor,
                 seqstarts: torch.Tensor, kvstarts: torch.Tensor, decoding_batches: torch.Tensor,
                 max_seqlen: torch.Tensor, max_kvlen: torch.Tensor,
-                attn_mask: Optional[torch.Tensor], num_heads: int, head_dim: int,
-                is_causal: bool = True, num_kv_heads: int = 0):
+                attn_mask: Optional[torch.Tensor],
+                num_heads: int, head_dim: int,
+                is_causal: bool = True, is_alibi: bool = False, 
+                num_kv_heads: int = 0):
         if torch.onnx.is_in_onnx_export():
             return query
 
@@ -59,6 +65,12 @@ class MultiHeadAttention(torch.autograd.Function):
 
         output = torch.zeros_like(__query)
 
+        if is_alibi:
+            if __name__ == "__main__":
+                from ALiBiMask import alibi_mask
+            else:
+                from .ALiBiMask import alibi_mask
+
         seqlens = seqstarts[1:] - seqstarts[:-1]
         kvlens = kvstarts[1:] - kvstarts[:-1]
         for b, seqlen in enumerate(seqlens):
@@ -67,11 +79,12 @@ class MultiHeadAttention(torch.autograd.Function):
             seqend = seqstarts[b+1]
             kvbeg = kvstarts[b]
             kvend = kvstarts[b+1]
+            kvlen = kvend - kvbeg
 
             if is_causal and seqlen > 1 and b >= decoding_batches.item():
-                assert seqlen == kvlen, "{} is not equal to {}".format(seqlen, kvlen)
-                causal_mask = torch.full((1, seqlen, kvlen), float("-inf"), device=__query.device)
-                causal_mask = torch.triu(causal_mask, diagonal=1).type_as(__query)
+                causal_mask = torch.zeros((1, seqlen, kvlen), device=__query.device, dtype=__query.dtype)
+                causal_mask[..., -seqlen:] = float("-inf")
+                causal_mask[..., -seqlen:] = torch.triu(causal_mask[..., -seqlen:], diagonal=1)
             else:
                 causal_mask = None
 
@@ -84,6 +97,14 @@ class MultiHeadAttention(torch.autograd.Function):
             if attn_mask is not None and attn_mask.numel() > 0:
                 # scores (num_heads, seqlen, kvlen)
                 scores = scores + attn_mask.to(scores.device)[..., seqbeg:seqend, kvbeg:kvend]
+            if is_alibi:
+                alibi_mask(
+                    torch.tensor([0, seqlen]),
+                    torch.tensor([0, kvlen]),
+                    None,
+                    num_heads=num_heads,
+                    data_type=_query.dtype).to(device=scores.device)[..., :kvlen]
+            
             scores = torch.nn.functional.softmax(scores.float(), dim=-1).type_as(_query)
             output[seqbeg:seqend] = torch.matmul(scores, _value).transpose(0, 1).contiguous()
 
@@ -94,11 +115,13 @@ def multi_head_attention(
                 query: torch.Tensor, key: torch.Tensor, value: torch.Tensor,
                 seqstarts: torch.Tensor, kvstarts: torch.Tensor, decoding_batches: torch.Tensor,
                 max_seqlen: torch.Tensor, max_kvlen: torch.Tensor,
-                attn_mask: Optional[torch.Tensor], num_heads: int, head_dim: int,
-                is_causal: bool = True, num_kv_heads: int = 0) -> torch.Tensor:
+                attn_mask: Optional[torch.Tensor],
+                num_heads: int, head_dim: int,
+                is_causal: bool = True, is_alibi: bool = False, 
+                num_kv_heads: int = 0) -> torch.Tensor:
     return MultiHeadAttention.apply(query, key, value, seqstarts, kvstarts, decoding_batches,
                                     max_seqlen, max_kvlen, attn_mask,
-                                    num_heads, head_dim, is_causal, num_kv_heads)
+                                    num_heads, head_dim, is_causal, is_alibi, num_kv_heads)
 
 
 if __name__ == "__main__":
@@ -115,7 +138,7 @@ if __name__ == "__main__":
                     max_seqlen: torch.Tensor, max_kvlen: torch.Tensor, attn_mask: torch.Tensor = None):
             return multi_head_attention(query, key, value, seqstarts, kvstarts, decoding_batches,
                                     max_seqlen, max_kvlen, attn_mask,
-                                    self.num_heads, self.head_dim, self.is_causal)
+                                    self.num_heads, self.head_dim, self.is_causal, True, self.num_heads)
 
 
     bs = 2

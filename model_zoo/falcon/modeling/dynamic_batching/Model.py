@@ -292,22 +292,22 @@ class Transformer(nn.Module):
         # TensorDumper.dump(h, "emb_out")
 
         _kv_scale = kv_scale
-        # TensorDumper.dump(tokens, "token_ids")
-        # if attn_mask is not None:
-        #     TensorDumper.dump(attn_mask, "attn_mask")
+        TensorDumper.dump(tokens, "token_ids")
+        if attn_mask is not None:
+            TensorDumper.dump(attn_mask, "attn_mask")
         if self.fused_kvcache and attn_mask is not None:
             if kv_scale is None: # mount an empty scale for friendly exporting
                 _kv_scale = torch.empty(0, dtype=h.dtype)
-        # TensorDumper.dump(seqstarts, "seqstarts")
-        # TensorDumper.dump(kvstarts, "kvstarts")
-        # TensorDumper.dump(cachestarts, "cachestarts")
-        # TensorDumper.dump(decoding_batches, "decoding_batches")
-        # TensorDumper.dump(start_pos, "start_pos")
-        # TensorDumper.dump(max_seqlen, "max_seqlen")
-        # TensorDumper.dump(max_kvlen, "max_kvlen")
-        # TensorDumper.dump(kv_cache, "kv_cache")
-        # if kv_scale is not None:
-        #     TensorDumper.dump(kv_scale, "kv_scale")
+        TensorDumper.dump(seqstarts, "seqstarts")
+        TensorDumper.dump(kvstarts, "kvstarts")
+        TensorDumper.dump(cachestarts, "cachestarts")
+        TensorDumper.dump(decoding_batches, "decoding_batches")
+        TensorDumper.dump(start_pos, "start_pos")
+        TensorDumper.dump(max_seqlen, "max_seqlen")
+        TensorDumper.dump(max_kvlen, "max_kvlen")
+        TensorDumper.dump(kv_cache, "kv_cache")
+        if kv_scale is not None:
+            TensorDumper.dump(kv_scale, "kv_scale")
 
         norm = None
         for layer in self.layers:
@@ -322,7 +322,7 @@ class Transformer(nn.Module):
         output = self.output(gathered_h)  # only compute last logits
         # TensorDumper.dump(output, "logits_before_cast")
         output = output.float()
-        # TensorDumper.dump(output, "logits")
+        TensorDumper.dump(output, "logits")
         return output
 
 

@@ -28,11 +28,24 @@ def main(
     params: ModelParams = ModelParams(**params)
 
     generator = Loader.load(
-        ckpt_dir, params, friendly_gqa,
-        fused_qkv, fused_kvcache, fused_ffn_glu,
-        auto_causal, quantized_cache, cache_layout,
-        cache_mode, dynamic_batching,
-        True, False, False, True
+        ckpt_dir, params,
+        friendly_gqa=friendly_gqa,
+        fused_qkv=fused_qkv,
+        fused_kvcache=fused_kvcache,
+        fused_ffn_glu=fused_ffn_glu,
+        fused_alibi=False,
+        auto_causal=auto_causal,
+        with_rope=True,
+        with_alibi=False,
+        quantized_cache=quantized_cache,
+        cache_layout=cache_layout,
+        cache_mode=cache_mode,
+        dynamic_batching=dynamic_batching,
+        attn_wqkv_bias_term=True,
+        attn_wo_bias_term=False,
+        ffn_linear_bias_term=False,
+        load_to_cpu=True,
+        rotary_dim=0,
     )
 
     generator.export(export_path)

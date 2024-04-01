@@ -66,9 +66,9 @@ class RotaryPositionEmbedding(torch.autograd.Function):
 
 
         def do_rotate(x: torch.Tensor, cos: torch.tensor, sin: torch.tensor):
-            x_rot = _x[..., :dim]
-            x_pass = _x[..., dim:]
-            _x = x.view(*x.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
+            x_rot = x[..., :dim]
+            x_pass = x[..., dim:]
+            x_rot = x_rot.view(*x.shape[:-1], -1, 2).transpose(-2, -1).contiguous().flatten(-2)
 
             x_a = x_rot[..., :x_rot.shape[-1] // 2]
             x_b = x_rot[..., x_rot.shape[-1] // 2:]

@@ -51,7 +51,7 @@ class KeyValueCache(torch.autograd.Function):
             scale, _ = torch.max(torch.abs(X), -1, True)
             scale = scale / torch.tensor([127.0], dtype=input.dtype, device=input.device)
             scale = torch.maximum(scale, torch.tensor([1e-5], dtype=input.dtype, device=input.device))
-            output = torch.round(X / scale).type(torch.int8)
+            output = torch.round(X / scale).clamp(-127.0, 127.0).type(torch.int8)
 
             output = output.reshape_as(input)
             scale = scale.reshape(*input.shape[:-1], -1)

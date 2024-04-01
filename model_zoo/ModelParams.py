@@ -18,6 +18,7 @@ class ModelParams:
 
     cache_layout: int = 0
     cache_mode: int = 0 # only affected when dynamic_batching == True
+    page_size: int = 128  # only affected when cache_mode == 1
 
     dynamic_batching: bool = True
     auto_causal: bool = True

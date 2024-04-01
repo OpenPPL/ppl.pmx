@@ -6,7 +6,13 @@ The difference between `dynamic_batching.KeyValueCache` and `KeyValueCache` is t
 
 `dynamic_batching.KeyValueCache` uses `seqstarts` and `kvstarts` to record the sequence begining position of each batch. And the ability to map batches to different locations in the cache is provided by `cachestarts`.
 
-In the description below, $L$ is number of attention layers(`num_layer`), $B$ is batch size, $MaxT$ is max tokens length `cache` could hold(i.e, it could be over 10,000,000 in some case), $H$ is `num_heads` of transformer, $Dh$ is `dims_per_head` or `head_dim` of transformer.
+In the description below
+ - $L$ is number of attention layers(`num_layer`)
+ - $B$ is batch size
+ - $MaxT$ is max tokens length `cache` could hold(i.e, it could be over 10,000,000 in some case)
+ - $MaxP$ is the max number of pages of sequences in [Paged Attention](https://arxiv.org/abs/2309.06180) mode.
+ - $H$ is `num_heads` of transformer
+ - $Dh$ is `dims_per_head` or `head_dim` of transformer.
 
 > NOTE：`cache` and `scale` are used as in-out tensor, so it is recommended to use them as model inputs, and let the user set the shape by themselves (mainly because `MaxT` need to be configured separately).
 
@@ -36,7 +42,9 @@ For [Grouped-Query Attention](https://arxiv.org/pdf/2305.13245.pdf). Repeat key 
 
 Define cache indexing mode. Default is zero.
 - When `cache_mode` is `0`, `cache` is indexed by offset mode. Shape of `cachestarts` is $(B)$. For each batch $b$, `cachestarts[b]` mapping cache begining index in $MaxT$ of `cache` and `scale`. Note that `cachestarts[b+1]-cachestarts[b]` can **not** calculate out the cache length of batch $b$.
-- When `cache_mode` is `1`, `cache` is indexed by table mode. Shape of `cachestarts` is $(kvstarts[B])$. For each batch $b$, `cachestarts[kvstarts[b]:kvstarts[b+1]]` contains cache indices of tokens in $MaxT$ of `cache` and `scale`.
+- When `cache_mode` is `1`, `cache` is indexed by page table mode, which called Paged Attention. Shape of `cachestarts` is $(B, MaxP)$. For each batch $b$, `cachestarts[b, :]` contains pages' begining index in $MaxT$ of `cache` and `scale`.<br>
+Example for `batch = 2, page_size = 256`:
+$$cachestarts=[[0,256,\cdots],[1024,2048,\cdots]]$$
 
 ### `cache_layout`: int(default: 0)
 
@@ -47,6 +55,10 @@ Meaning of numbers:
 - `1`: $cache(L,MaxT,2,H,Dh)$ and $scale(L,MaxT,2,H,Dh/quant\\_group)$
 - `2`: $cache(L,2,MaxT,H,Dh)$ and $scale(L,2,MaxT,H,Dh/quant\\_group)$
 - `3`: $cache(L,2,H,MaxT,Dh)$ and $scale(L,2,H,MaxT,Dh/quant\\_group)$
+
+### `page_size`: int(default: 128)
+
+Page size in Paged Attention(when `cache_mode` is `1`)
 
 ## Inputs
 
@@ -80,7 +92,7 @@ Shape: $(B+1)$
 
 Indexing cache position in $MaxT$ of `cache` and `scale`. Behavior is determinated by `cache_mode`.
 
-Shape: $(B)$ or $(kvstarts[B])$
+Shape: $(B)$ or $(B, MaxP)$
 
 ### `start_pos`: tensor(int64)
 

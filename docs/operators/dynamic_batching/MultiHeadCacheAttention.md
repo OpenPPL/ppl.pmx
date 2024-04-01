@@ -18,7 +18,11 @@ Dimension of each head, where $head\\_dim * num\\_heads = hidden\\_dim$
 
 ### `is_causal`: bool
 
-Whether do casual mask when sequence length > 1. If `is_causal` is `True`, length of `query`, `key` and `value` within every batchs must be equal.
+Whether apply casual mask when sequence length > 1.
+
+### `is_alibi`: bool(default: `False`)
+
+Whether apply alibi mask within the operator. Do not need to set alibi mask in `attn_mask` when it is `True`
 
 ### `num_kv_heads`: int(default: 0)
 
@@ -44,7 +48,9 @@ Quantize scale shared group size. $2^n$ and $n > 2$ is recommanded for hardware 
 
 Define cache indexing mode. Default is zero.
 - When `cache_mode` is `0`, cache is indexed by offset mode. Shape of `cachestarts` is $(B)$. For each batch $b$, `cachestarts[b]` mapping cache begining index in $MaxT$ of `cache` and `scale`. Note that `cachestarts[b+1]-cachestarts[b]` can **not** calculate out the cache length of batch $b$.
-- When `cache_mode` is `1`, cache is indexed by table mode. Shape of `cachestarts` is $(kvstarts[B])$. For each batch $b$, `cachestarts[kvstarts[b]:kvstarts[b+1]]` contains cache indices of tokens in $MaxT$ of `cache` and `scale`.
+- When `cache_mode` is `1`, `cache` is indexed by page table mode, which called Paged Attention. Shape of `cachestarts` is $(B, MaxP)$. For each batch $b$, `cachestarts[b, :]` contains pages' begining index in $MaxT$ of `cache` and `scale`.<br>
+Example for `batch = 2, page_size = 256`:
+$$cachestarts=[[0,256,\cdots],[1024,2048,\cdots]]$$
 
 ### `cache_layout`: int(default: 0)
 
@@ -55,6 +61,10 @@ Meaning of numbers:
 - `1`: $cache(L,MaxT,2,H,Dh)$ and $scale(L,MaxT,2,H,Dh/quant\\_group)$
 - `2`: $cache(L,2,MaxT,H,Dh)$ and $scale(L,2,MaxT,H,Dh/quant\\_group)$
 - `3`: $cache(L,2,H,MaxT,Dh)$ and $scale(L,2,H,MaxT,Dh/quant\\_group)$
+
+### `page_size`: int(default: 128)
+
+Page size in Paged Attention(when `cache_mode` is `1`)
 
 ## Inputs
 
@@ -96,7 +106,7 @@ Shape: $(B+1)$
 
 Indexing cache position in $MaxT$ of `cache` and `scale`. Behavior is determinated by `cache_mode`.
 
-Shape: $(B)$ or $(kvstarts[B])$
+Shape: $(B)$ or $(B, MaxP)$
 
 ### `start_pos`: tensor(int64)
 

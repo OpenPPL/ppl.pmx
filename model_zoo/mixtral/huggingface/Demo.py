@@ -31,6 +31,7 @@ def main(
     cache_layout: int = 0, # change kv cache layout for hardware performance friendly
     cache_mode: int = 0, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
     dynamic_batching: bool = True, # use dynamic batching scheduling
+    context_chunking: bool = True, # enable context chunking for dynamic batching
     dump_tensor_path: str = None,
     dump_steps: List[int] = []
 ):
@@ -49,7 +50,9 @@ def main(
         False, False, False, False,
         0, dump_tensor_path, dump_steps
     )
-    
+
+    generator.context_chunking = context_chunking if dynamic_batching else False
+
     if unaligned_batch:
         test_prompt = [        # For these prompts, the expected answer is the natural continuation of the prompt
         "I believe the meaning of life is",

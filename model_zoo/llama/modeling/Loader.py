@@ -22,7 +22,10 @@ def load(
     fused_qkv: bool, # fuse qkv linear
     fused_kvcache: bool, # fuse key_value_cache and multi_head_attention
     fused_ffn_glu: bool, # fuse feed forward gate linear unit
+    fused_alibi: bool, # fuse alibi_mask and multi_head_attention
     auto_causal: bool, # causal mask is auto done by attention op, no need to pass additional mask to the model
+    with_rope: bool, # use rotary position embedding
+    with_alibi: bool, # use alibi_mask for position emdedding
     quantized_cache: bool, # 8bit kv cache quantization
     cache_layout: int, # change kv cache layout for hardware performance friendly
     cache_mode: int, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
@@ -85,6 +88,9 @@ def load(
                         fused_qkv,
                         fused_kvcache,
                         fused_ffn_glu,
+                        fused_alibi,
+                        with_rope,
+                        with_alibi,
                         attn_wqkv_bias_term,
                         attn_wo_bias_term,
                         ffn_linear_bias_term,
