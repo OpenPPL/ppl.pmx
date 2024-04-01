@@ -17,11 +17,15 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                  start_pos: torch.Value, decoding_batches: torch.Value,
                  max_seqlen: torch.Value, max_kvlen: torch.Value,
                  cache: torch.Value, scale: Optional[torch.Value],
-                 attn_mask: Optional[torch.Value], num_heads: int, head_dim: int,
-                 is_causal: bool = True, num_kv_heads: int = 0,
+                 attn_mask: Optional[torch.Value],
+                 num_heads: int, head_dim: int,
+                 is_causal: bool = True,
+                 is_alibi: bool = False,
+                 num_kv_heads: int = 0,
                  num_layer: int = 1, layer_idx: int = 0,
                  quant_bit: int = 0, quant_group: int = 8,
-                 cache_mode: int = 0, cache_layout: int = 0):
+                 cache_mode: int = 0, cache_layout: int = 0,
+                 page_size: int = 128):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if attn_mask is not None:
             output = g.op('pmx.dynamic_batching::MultiHeadCacheAttention',
@@ -33,13 +37,15 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 num_heads_i=num_heads,
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
+                is_alibi_i=is_alibi,
                 num_kv_heads_i=num_kv_heads,
                 num_layer_i=num_layer,
                 layer_idx_i=layer_idx,
                 quant_bit_i=quant_bit,
                 quant_group_i=quant_group,
                 cache_mode_i=cache_mode,
-                cache_layout_i=cache_layout)
+                cache_layout_i=cache_layout,
+                page_size_i=page_size)
         elif scale is not None:
             output = g.op('pmx.dynamic_batching::MultiHeadCacheAttention',
                 query, current_key, current_value,
@@ -50,13 +56,15 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 num_heads_i=num_heads,
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
+                is_alibi_i=is_alibi,
                 num_kv_heads_i=num_kv_heads,
                 num_layer_i=num_layer,
                 layer_idx_i=layer_idx,
                 quant_bit_i=quant_bit,
                 quant_group_i=quant_group,
                 cache_mode_i=cache_mode,
-                cache_layout_i=cache_layout)
+                cache_layout_i=cache_layout,
+                page_size_i=page_size)
         else:
             output = g.op('pmx.dynamic_batching::MultiHeadCacheAttention',
                 query, current_key, current_value,
@@ -66,13 +74,15 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 num_heads_i=num_heads,
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
+                is_alibi_i=is_alibi,
                 num_kv_heads_i=num_kv_heads,
                 num_layer_i=num_layer,
                 layer_idx_i=layer_idx,
                 quant_bit_i=quant_bit,
                 quant_group_i=quant_group,
                 cache_mode_i=cache_mode,
-                cache_layout_i=cache_layout)
+                cache_layout_i=cache_layout,
+                page_size_i=page_size)
         return output.setTypeAs(query)
 
 
@@ -82,11 +92,15 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                  start_pos: torch.Tensor, decoding_batches: torch.Tensor,
                  max_seqlen: torch.Tensor, max_kvlen: torch.Tensor,
                  cache: torch.Tensor, scale: Optional[torch.Tensor],
-                 attn_mask: Optional[torch.Tensor], num_heads: int, head_dim: int,
-                 is_causal: bool = True, num_kv_heads: int = 0,
+                 attn_mask: Optional[torch.Tensor],
+                 num_heads: int, head_dim: int,
+                 is_causal: bool = True,
+                 is_alibi: bool = False,
+                 num_kv_heads: int = 0,
                  num_layer: int = 1, layer_idx: int = 0,
                  quant_bit: int = 0, quant_group: int = 8,
-                 cache_mode: int = 0, cache_layout: int = 0):
+                 cache_mode: int = 0, cache_layout: int = 0,
+                 page_size: int = 128):
         if torch.onnx.is_in_onnx_export():
             return query
 
@@ -96,14 +110,22 @@ class MultiHeadCacheAttention(torch.autograd.Function):
             start_pos, max_seqlen, max_kvlen,
             cache, scale, num_layer, layer_idx,
             quant_bit, quant_group, 1,
-            cache_mode, cache_layout)
-        
+            cache_mode, cache_layout, page_size)
+
+        if is_alibi:
+            if __name__ == "__main__":
+                from ALiBiMask import alibi_mask
+            else:
+                from .ALiBiMask import alibi_mask
+            attn_mask = alibi_mask(seqstarts, kvstarts, attn_mask,
+                                   num_heads, query.dtype)
+
         output = multi_head_attention(
             query, key, value, seqstarts,
             kvstarts, decoding_batches,
             max_seqlen, max_kvlen, attn_mask,
             num_heads, head_dim,
-            is_causal, num_kv_heads)
+            is_causal, False, num_kv_heads)
 
         return output
 
@@ -114,22 +136,28 @@ def multi_head_cache_attention(
                 start_pos: torch.Tensor, decoding_batches: torch.Tensor,
                 max_seqlen: torch.Tensor, max_kvlen: torch.Tensor,
                 cache: torch.Tensor, scale: Optional[torch.Tensor],
-                attn_mask: Optional[torch.Tensor], num_heads: int, head_dim: int,
-                is_causal: bool = True, num_kv_heads: int = 0,
+                attn_mask: Optional[torch.Tensor],
+                num_heads: int, head_dim: int,
+                is_causal: bool = True,
+                is_alibi: bool = False,
+                num_kv_heads: int = 0,
                 num_layer: int = 1, layer_idx: int = 0,
                 quant_bit: int = 0, quant_group: int = 8,
-                cache_mode: int = 0, cache_layout: int = 0) -> torch.Tensor:
+                cache_mode: int = 0, cache_layout: int = 0,
+                page_size: int = 128) -> torch.Tensor:
     if attn_mask is not None and scale is None:
         _scale = torch.empty(0, device=query.device)
     else:
         _scale = scale
     return MultiHeadCacheAttention.apply(query, current_key, current_value, seqstarts, kvstarts,
-                                         cachestarts, start_pos, decoding_batches,
+                                        cachestarts, start_pos, decoding_batches,
                                         max_seqlen, max_kvlen, cache, _scale,
                                         attn_mask, num_heads, head_dim,
-                                        is_causal, num_kv_heads, num_layer,
+                                        is_causal, is_alibi,
+                                        num_kv_heads, num_layer,
                                         layer_idx, quant_bit, quant_group,
-                                        cache_mode, cache_layout)
+                                        cache_mode, cache_layout,
+                                        page_size)
 
 
 if __name__ == "__main__":
@@ -158,7 +186,7 @@ if __name__ == "__main__":
                                         query, current_key, current_value, seqstarts, kvstarts,
                                         cachestarts, start_pos, decoding_batches,
                                         max_seqlen, max_kvlen, cache, scale, attn_mask,
-                                        self.num_heads, self.head_dim, self.is_causal, self.num_kv_heads,
+                                        self.num_heads, self.head_dim, self.is_causal, True, self.num_kv_heads,
                                         self.num_layer, self.layer_idx, self.quant_bit, self.quant_group)
 
 

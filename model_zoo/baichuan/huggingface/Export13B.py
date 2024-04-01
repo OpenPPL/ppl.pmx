@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../..")
 
-import baichuan.modeling.Loader as Loader
+import llama.modeling.Loader as Loader
 from Tokenizer import Tokenizer
 from ModelParams import ModelParams
 
@@ -19,6 +19,7 @@ def main(
     fused_qkv: bool = True, # fuse qkv linear
     fused_kvcache: bool = True, # fuse key_value_cache and multi_head_attention
     fused_ffn_glu: bool = True, # fuse feed forward gate linear unit
+    fused_alibi: bool = True, # fuse alibi mask with attention
     auto_causal: bool = True, # causal mask is auto done by attention op, no need to pass additional mask to the model
     quantized_cache: bool = True, # 8bit kv cache quantization
     cache_layout: int = 0, # change kv cache layout for hardware performance friendly
@@ -30,11 +31,24 @@ def main(
     params: ModelParams = ModelParams(**params)
 
     generator = Loader.load(
-        ckpt_dir, params, friendly_gqa,
-        fused_qkv, fused_kvcache, fused_ffn_glu,
-        auto_causal, quantized_cache, cache_layout,
-        cache_mode, dynamic_batching,
-        False, False, True
+        ckpt_dir, params,
+        friendly_gqa=friendly_gqa,
+        fused_qkv=fused_qkv,
+        fused_kvcache=fused_kvcache,
+        fused_ffn_glu=fused_ffn_glu,
+        fused_alibi=fused_alibi,
+        auto_causal=auto_causal,
+        with_rope=False,
+        with_alibi=True,
+        quantized_cache=quantized_cache,
+        cache_layout=cache_layout,
+        cache_mode=cache_mode,
+        dynamic_batching=dynamic_batching,
+        attn_wqkv_bias_term=False,
+        attn_wo_bias_term=False,
+        ffn_linear_bias_term=False,
+        load_to_cpu=True,
+        rotary_dim=0
     )
 
     generator.export(export_path)

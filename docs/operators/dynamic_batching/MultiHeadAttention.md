@@ -19,7 +19,11 @@ Dimension of each head, where $head\\_dim * num\\_heads = hidden\\_dim$
 
 ### `is_causal`: bool
 
-Whether do casual mask when sequence length > 1. If `is_causal` is `True`, length of `query`, `key` and `value` within every batchs must be equal.
+Whether apply casual mask when sequence length > 1.
+
+### `is_alibi`: bool(default: `False`)
+
+Whether apply alibi mask within the operator. Do not need to set alibi mask in `attn_mask` when it is `True`
 
 ### `num_kv_heads`: int(default: 0)
 

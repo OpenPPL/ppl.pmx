@@ -44,6 +44,9 @@ class Attention(nn.Module):
             friendly_gqa: bool,
             fused_qkv: bool,
             fused_kvcache: bool,
+            fused_alibi: bool,
+            with_rope: bool,
+            with_alibi: bool,
             attn_wqkv_bias_term: bool,
             attn_wo_bias_term: bool,
             rotary_dim: int,
@@ -57,19 +60,24 @@ class Attention(nn.Module):
         self.num_local_kv_heads = self.num_kv_heads // world_size
         self.num_local_kv_repeats = self.num_local_heads // self.num_local_kv_heads
         self.head_dim = args.hidden_dim // args.num_heads
-        self.rotary_dim = rotary_dim
         self.num_layers = args.num_layers
         self.layer_id = layer_id
         self.cache_quant_bit = args.cache_quant_bit
         self.cache_quant_group = args.cache_quant_group
         self.cache_layout = args.cache_layout
         self.cache_mode = args.cache_mode
+        self.page_size = args.page_size
 
         self.friendly_gqa = friendly_gqa
         self.fused_qkv = fused_qkv
         self.fused_kvcache = fused_kvcache
         self.auto_causal = args.auto_causal
 
+        self.with_alibi = with_alibi
+        self.fused_alibi = fused_alibi
+
+        self.with_rope = with_rope
+        self.rotary_dim = rotary_dim
         self.rope_theta = args.rope_theta
         self.rope_scaling_type = args.rope_scaling_type
         self.rope_scaling_factor = args.rope_scaling_factor
@@ -115,16 +123,16 @@ class Attention(nn.Module):
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
-
-        xq, xk = PMX.dynamic_batching.rotary_position_embedding(
-                                        xq, xk, seqstarts,
-                                        start_pos, max_seqlen,
-                                        self.rotary_dim,
-                                        max_position_embeddings=self.max_position_embeddings,
-                                        theta=self.rope_theta, scaling_type=self.rope_scaling_type,
-                                        scaling_factor=self.rope_scaling_factor)
-        # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
-        # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
+        if self.with_rope:
+            xq, xk = PMX.dynamic_batching.rotary_position_embedding(
+                                            xq, xk, seqstarts,
+                                            start_pos, max_seqlen,
+                                            rotary_dim=self.rotary_dim,
+                                            max_position_embeddings=self.max_position_embeddings,
+                                            theta=self.rope_theta, scaling_type=self.rope_scaling_type,
+                                            scaling_factor=self.rope_scaling_factor)
+            # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
+            # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
         if self.fused_kvcache:
             attn = PMX.dynamic_batching.multi_head_cache_attention(
@@ -137,13 +145,15 @@ class Attention(nn.Module):
                 num_heads=self.num_local_heads,
                 head_dim=self.head_dim,
                 is_causal=self.auto_causal,
+                is_alibi=self.with_alibi and self.fused_alibi,
                 num_kv_heads=self.num_local_kv_heads,
                 num_layer=self.num_layers,
                 layer_idx=self.layer_id,
                 quant_bit=self.cache_quant_bit,
                 quant_group=self.cache_quant_group,
                 cache_mode=self.cache_mode,
-                cache_layout=self.cache_layout)
+                cache_layout=self.cache_layout,
+                page_size=self.page_size)
         else:
             keys, values = PMX.dynamic_batching.key_value_cache(
                                             xk, xv, seqstarts, kvstarts,
@@ -156,7 +166,8 @@ class Attention(nn.Module):
                                             quant_group=self.cache_quant_group,
                                             num_repeat=self.num_local_kv_repeats if self.friendly_gqa else 1,
                                             cache_mode=self.cache_mode,
-                                            cache_layout=self.cache_layout)
+                                            cache_layout=self.cache_layout,
+                                            page_size=self.page_size)
             # TensorDumper.dump(kv_cache, "layer{}_modified_kv_cache".format(self.layer_id))
             # TensorDumper.dump(kv_scale, "layer{}_modified_kv_scale".format(self.layer_id))
             # TensorDumper.dump(keys, "layer{}_key_value_cache_out_keys".format(self.layer_id))
@@ -170,6 +181,7 @@ class Attention(nn.Module):
                                             num_heads=self.num_local_heads,
                                             head_dim=self.head_dim,
                                             is_causal=self.auto_causal,
+                                            is_alibi=self.with_alibi and self.fused_alibi,
                                             num_kv_heads=0 if self.friendly_gqa else self.num_local_kv_heads)
         attn = PMX.reshape(attn, (0, -1))
         # TensorDumper.dump(attn, "layer{}_multi_head_attention_out".format(self.layer_id))
@@ -233,6 +245,9 @@ class TransformerBlock(nn.Module):
                  fused_qkv: bool,
                  fused_kvcache: bool,
                  fused_ffn_glu: bool,
+                 fused_alibi: bool,
+                 with_rope: bool,
+                 with_alibi: bool,
                  attn_wqkv_bias_term: bool,
                  attn_wo_bias_term: bool,
                  ffn_linear_bias_term: bool,
@@ -244,6 +259,9 @@ class TransformerBlock(nn.Module):
                                    friendly_gqa,
                                    fused_qkv,
                                    fused_kvcache,
+                                   fused_alibi,
+                                   with_rope,
+                                   with_alibi,
                                    attn_wqkv_bias_term,
                                    attn_wo_bias_term,
                                    rotary_dim=rotary_dim,
@@ -284,6 +302,9 @@ class Transformer(nn.Module):
                  fused_qkv: bool,
                  fused_kvcache: bool,
                  fused_ffn_glu: bool,
+                 fused_alibi: bool,
+                 with_rope: bool,
+                 with_alibi: bool,
                  attn_wqkv_bias_term: bool,
                  attn_wo_bias_term: bool,
                  ffn_linear_bias_term: bool,
@@ -297,6 +318,9 @@ class Transformer(nn.Module):
         self.fused_qkv = fused_qkv
         self.fused_kvcache = fused_kvcache
         self.fused_ffn_glu = fused_ffn_glu
+
+        self.with_alibi = with_alibi
+        self.fused_alibi = fused_alibi
 
         world_size = 1 if proc_group is None else proc_group.size()
         num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
@@ -317,6 +341,9 @@ class Transformer(nn.Module):
                 fused_qkv,
                 fused_kvcache,
                 fused_ffn_glu,
+                fused_alibi,
+                with_rope,
+                with_alibi,
                 attn_wqkv_bias_term,
                 attn_wo_bias_term,
                 ffn_linear_bias_term,
@@ -353,6 +380,10 @@ class Transformer(nn.Module):
         TensorDumper.dump(kv_cache, "kv_cache")
         if kv_scale is not None:
             TensorDumper.dump(kv_scale, "kv_scale")
+
+        if self.with_alibi and not self.fused_alibi:
+            attn_mask = PMX.dynamic_batching.alibi_mask(seqstarts, kvstarts, attn_mask, self.params.num_heads, h.dtype)
+            # TensorDumper.dump(attn_mask, "alibi_mask")
 
         norm = None
         for layer in self.layers:

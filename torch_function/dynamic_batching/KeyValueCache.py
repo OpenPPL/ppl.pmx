@@ -13,7 +13,8 @@ class KeyValueCache(torch.autograd.Function):
         cache: torch.Value, scale: Optional[torch.Value],
         num_layer: int = 1, layer_idx: int = 0, quant_bit: int = 0,
         quant_group: int = 8, num_repeat: int = 1,
-        cache_mode: int = 0, cache_layout: int = 0):
+        cache_mode: int = 0, cache_layout: int = 0,
+        page_size: int = 128):
         if scale is not None:
              key, value = g.op("pmx.dynamic_batching::KeyValueCache",
                     current_key, current_value, seqstarts, kvstarts,
@@ -25,6 +26,7 @@ class KeyValueCache(torch.autograd.Function):
                     num_repeat_i = num_repeat,
                     cache_mode_i = cache_mode,
                     cache_layout_i = cache_layout,
+                    page_size_i = page_size,
                     outputs = 2)
         else:
             key, value = g.op("pmx.dynamic_batching::KeyValueCache",
@@ -37,6 +39,7 @@ class KeyValueCache(torch.autograd.Function):
                     num_repeat_i = num_repeat,
                     cache_mode_i = cache_mode,
                     cache_layout_i = cache_layout,
+                    page_size_i = page_size,
                     outputs = 2)
         return key, value
 
@@ -50,7 +53,8 @@ class KeyValueCache(torch.autograd.Function):
         cache: torch.Tensor, scale: Optional[torch.Tensor],
         num_layer: int = 1, layer_idx: int = 0, quant_bit: int = 0,
         quant_group: int = 8, num_repeat: int = 1,
-        cache_mode: int = 0, cache_layout: int = 0):
+        cache_mode: int = 0, cache_layout: int = 0,
+        page_size: int = 128):
         if torch.onnx.is_in_onnx_export():
             return current_key, current_value
 
@@ -62,7 +66,7 @@ class KeyValueCache(torch.autograd.Function):
             scale, _ = torch.max(torch.abs(X), -1, True)
             scale = scale / torch.tensor([127.0]).type_as(input)
             scale = torch.maximum(scale, torch.tensor([1e-5]).type_as(input))
-            output = torch.round(X / scale).type(torch.int8)
+            output = torch.round(X / scale).clamp(-127.0, 127.0).type(torch.int8)
 
             output = output.reshape_as(input)
             scale = scale.reshape(*input.shape[:-1], -1)
@@ -89,14 +93,21 @@ class KeyValueCache(torch.autograd.Function):
             seqend = seqstarts[b+1]
             kvbeg = kvstarts[b]
             kvend = kvstarts[b+1]
+            kvlen = kvend - kvbeg
             if cache_mode == 0:
                 storebeg = cachestarts[b] + position
                 storeend = cachestarts[b] + position + seqlen
                 loadbeg = cachestarts[b]
                 loadend = storeend
             elif cache_mode == 1:
-                storeidx = cachestarts[kvbeg + position:kvend]
-                loadidx = cachestarts[kvbeg:kvend]
+                storeidx = torch.zeros(seqlen, dtype=torch.int64)
+                loadidx = torch.zeros(kvlen, dtype=torch.int64)
+                for i, t in zip(range(0, seqlen), range(position, position + seqlen)):
+                    storeidx[i] = cachestarts[b, t // page_size] + t % page_size
+                for i in range(0, kvlen):
+                    loadidx[i] = cachestarts[b, i // page_size] + i % page_size
+                storeidx.to(device=cachestarts.device)
+                loadidx.to(device=cachestarts.device)
             else:
                 raise Exception("invalid cache_mode: {}".format(cache_mode))
 
@@ -328,10 +339,11 @@ def key_value_cache(
         cache: torch.Tensor, scale: Optional[torch.Tensor],
         num_layer: int = 1, layer_idx: int = 0, quant_bit: int = 0,
         quant_group: int = 8, num_repeat: int = 1,
-        cache_mode: int = 0, cache_layout: int = 0) -> torch.Tensor:
+        cache_mode: int = 0, cache_layout: int = 0,
+        page_size: int = 128) -> torch.Tensor:
     return KeyValueCache.apply(current_key, current_value, seqstarts, kvstarts, cachestarts, 
                                start_pos, max_seqlen, max_kvlen, cache, scale, num_layer, layer_idx,
-                               quant_bit, quant_group, num_repeat, cache_mode, cache_layout)
+                               quant_bit, quant_group, num_repeat, cache_mode, cache_layout, page_size)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from ModelUtils import __TextGenerator__
 class Falcon(__TextGenerator__):
     def __init__(self, model: Transformer):
         self.model = model
+        self.context_chunking = False
 
     def generate(
         self,
@@ -41,6 +42,9 @@ class Falcon(__TextGenerator__):
             padded_dim = (last_dim + 15) // 16 * 16
             return torch.nn.functional.pad(x, (0, padded_dim - last_dim), "constant", 0)
 
+
+        if self.context_chunking == True:
+            raise Exception("static batching does not support context chunking")
 
         bsz = len(prompts_ids)
 

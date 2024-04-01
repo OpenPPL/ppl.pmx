@@ -81,9 +81,9 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
             f"layers.{layer_i}.attention_norm.weight": loaded[0][f"layers.{layer_i}.attention_norm.weight"].clone(),
             f"layers.{layer_i}.ffn_norm.weight": loaded[0][f"layers.{layer_i}.ffn_norm.weight"].clone(),
             f"layers.{layer_i}.attention.wo.weight": torch.cat([loaded[i][f"layers.{layer_i}.attention.wo.weight"] for i in range(num_shards)], dim=1),
-            f"layers.{layer_i}.feed_forward.w1.weight": torch.cat([loaded[i][f"layers.{layer_i}.feed_forward.w1.weight"] for i in range(num_shards)], dim=0),
-            f"layers.{layer_i}.feed_forward.w2.weight": torch.cat([loaded[i][f"layers.{layer_i}.feed_forward.w2.weight"] for i in range(num_shards)], dim=1),
-            f"layers.{layer_i}.feed_forward.w3.weight": torch.cat([loaded[i][f"layers.{layer_i}.feed_forward.w3.weight"] for i in range(num_shards)], dim=0),
+            f"layers.{layer_i}.feed_forward.w1.weight": torch.cat([loaded[i][f"layers.{layer_i}.feed_forward.w1.weight"] for i in range(num_shards)], dim=-2),
+            f"layers.{layer_i}.feed_forward.w2.weight": torch.cat([loaded[i][f"layers.{layer_i}.feed_forward.w2.weight"] for i in range(num_shards)], dim=-1),
+            f"layers.{layer_i}.feed_forward.w3.weight": torch.cat([loaded[i][f"layers.{layer_i}.feed_forward.w3.weight"] for i in range(num_shards)], dim=-2),
         })
 
     state_dict.update({
