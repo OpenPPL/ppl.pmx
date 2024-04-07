@@ -241,16 +241,16 @@ class LLaMA(__TextGenerator__):
 
         if self.model.params.cache_layout == 0:
             cache_prefix_shape = (total_cache_len, num_layers, 2, num_local_kv_heads)
-            max_tokenlen_idx = 0
+            max_tokens_idx = 0
         elif self.model.params.cache_layout == 1:
             cache_prefix_shape = (num_layers, total_cache_len, 2, num_local_kv_heads)
-            max_tokenlen_idx = 1
+            max_tokens_idx = 1
         elif self.model.params.cache_layout == 2:
             cache_prefix_shape = (num_layers, 2, total_cache_len, num_local_kv_heads)
-            max_tokenlen_idx = 2
+            max_tokens_idx = 2
         elif self.model.params.cache_layout == 3:
             cache_prefix_shape = (num_layers, 2, num_local_kv_heads, total_cache_len)
-            max_tokenlen_idx = 3
+            max_tokens_idx = 3
         else:
             raise Exception("unsupported cache_layout: {}".format(self.model.params.cache_layout))
 
@@ -306,10 +306,10 @@ class LLaMA(__TextGenerator__):
                 0:'batch'
             },
             'kv_cache': {
-                max_tokenlen_idx: 'max_tokenlen'
+                max_tokens_idx: 'max_tokens'
             },
             'kv_scale': {
-                max_tokenlen_idx: 'max_tokenlen'
+                max_tokens_idx: 'max_tokens'
             },
             'logits': {
                 0: 'batch',
