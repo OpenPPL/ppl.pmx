@@ -308,7 +308,7 @@ class LLaMA(__TextGenerator__):
                 max_tokens_idx: 'max_tokens'
             },
             'kv_scale': {
-                max_tokenlen_idx: 'max_tokenlen'
+                max_tokens_idx: 'max_tokens'
             },
             'logits': {
                 0: 'batch',
