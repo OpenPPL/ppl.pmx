@@ -74,6 +74,12 @@ def write_pmx_model(model_path, input_base_path, model_type):
         pmx_params_dict['intermediate_dim'] = params.get("intermediate_size")
     else:
         pmx_params_dict['intermediate_dim'] = compute_intermediate_size(hidden_dim, ffn_dim_multiplier, multiple_of)
+
+    for key in ('max_position_embeddings', 'rope_theta'):
+        if key in params:
+            pmx_params_dict[key] = params[key]
+
+    print(pmx_params_dict)
     write_json(pmx_params_dict, os.path.join(model_path, "pmx_params.json"))
 
     # TO DO: GQA / MQA, only test on llama
@@ -87,6 +93,13 @@ def write_pmx_model(model_path, input_base_path, model_type):
         return w.view(n_heads, 2, dim1 // n_heads // 2, dim2).transpose(1, 2).reshape(dim1, dim2)
 
     hf_model_state_dict, state_dict = {}, {}
+
+    if model_type is None:
+        if any(Path(input_base_path).glob("*.safetensors")):
+            model_type = "safetensors"
+        else:
+            model_type = "bin"
+
     if model_type == "bin":
         for ckpt_path in sorted(Path(input_base_path).glob("*.bin")):
             hf_model_state_dict.update(torch.load(ckpt_path, map_location="cpu"))
@@ -137,7 +150,7 @@ def main():
     parser.add_argument(
         "--model_type",
         choices=["bin", "safetensors"],
-        default="bin",
+        default=None,
         help="Input model type",
     )
     args = parser.parse_args()
