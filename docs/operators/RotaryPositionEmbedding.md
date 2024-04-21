@@ -39,6 +39,22 @@ Hyperameter $\theta$ to adjust rotate angle interval.
 
 Bypass rotating `key` for compatibility.
 
+### `max_position_embeddings`: int(default: 2048)
+
+Max position embedding index for scaling overflow position embeddings. Only effected when `scaling_type != ''`.
+
+### `scaling_type`: string(default: '')
+
+Rotate embeddings scaling type when position index is larger than `max_position_embeddings`.
+
+- '': `posision = position`
+- 'linear': `posision = position / scaling_factor`
+- 'dynamic': `theta = theta * ((scaling_factor * (position + seqlen) / max_position_embeddings) - (scaling_factor - 1)) ** (rotary_dim / (rotary_dim - 2))`
+
+### `scaling_factor`: float(default: 1.0)
+
+Rotate embeddings scaling factor for `scaling_type != ''`.
+
 ## Inputs
 
 ### `query`: tensor(T)

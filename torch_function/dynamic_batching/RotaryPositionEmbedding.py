@@ -63,9 +63,9 @@ class RotaryPositionEmbedding(torch.autograd.Function):
             t = torch.arange(position, position + seqlen, dtype=torch.float, device=query.device)
             if scaling_type == 'linear':
                 t = t / scaling_factor
-            if scaling_type == 'dynamic' and seqlen > max_position_embeddings:
+            if scaling_type == 'dynamic' and position + seqlen > max_position_embeddings:
                 theta = theta * (
-                    (scaling_factor * seqlen / max_position_embeddings) - (scaling_factor - 1)
+                    (scaling_factor * (position + seqlen) / max_position_embeddings) - (scaling_factor - 1)
                 ) ** (dim / (dim - 2))
             freqs = (1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float, device=query.device)[: (dim // 2)] / dim)))
             freqs_cis = torch.outer(t, freqs)

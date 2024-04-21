@@ -1,6 +1,6 @@
 import sys
 import os
-from sentencepiece import SentencePieceProcessor
+from tokenizers import Tokenizer as TokenizerFast
 from logging import getLogger
 from typing import List
 
@@ -14,22 +14,21 @@ class Tokenizer(__Tokenizer__):
     def __init__(self, model_path: str):
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
-        self.sp_model = SentencePieceProcessor(model_file=model_path)
-        logger.info(f"Reloaded SentencePiece model from {model_path}")
+        self.sp_model = TokenizerFast.from_file(model_path)
+
+        self.bos_token = "<|begin_of_text|>"
+        self.eos_token = "<|endoftext|>"
+        self.pad_token = "<|endoftext|>"
 
         # BOS / EOS token IDs
-        self.n_words: int = self.sp_model.vocab_size()
-        self.bos_id: int = self.sp_model.bos_id()
-        self.eos_id: int = self.sp_model.eos_id()
-        self.pad_id: int = self.sp_model.pad_id()
-        logger.info(
-            f"#words: {self.n_words} - BOS ID: {self.bos_id} - EOS ID: {self.eos_id}"
-        )
-        assert self.sp_model.vocab_size() == self.sp_model.get_piece_size()
+        self.n_words: int = self.sp_model.get_vocab_size()
+        self.bos_id: int = self.sp_model.token_to_id(self.bos_token)
+        self.eos_id: int = self.sp_model.token_to_id(self.eos_token)
+        self.pad_id: int = self.sp_model.token_to_id(self.pad_token)
 
     def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
         assert type(s) is str
-        t = self.sp_model.encode(s)
+        t = self.sp_model.encode(s).ids
         if bos:
             t = [self.bos_id] + t
         if eos:
@@ -47,6 +46,6 @@ class Tokenizer(__Tokenizer__):
 
     def get_eos_id(self):
         return self.eos_id
-    
+
     def get_pad_id(self):
         return self.pad_id

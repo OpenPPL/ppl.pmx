@@ -47,19 +47,23 @@ class RotaryPositionEmbedding(torch.autograd.Function):
         if pad_len is None:
             pad_len = torch.zeros(bs, dtype=start_pos.dtype, device=start_pos.device)
 
-        # generate cos cache, sin cache
-        if scaling_type == 'dynamic' and seqlen > max_position_embeddings:
-            theta = theta * (
-                (scaling_factor * seqlen / max_position_embeddings) - (scaling_factor - 1)
-            ) ** (dim / (dim - 2))
+        position = start_pos.item()
 
-        freqs = (1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float, device=query.device)[: (dim // 2)] / dim)))
+        # generate cos cache, sin cache
         freqs_cis = torch.zeros(bs, seqlen, dim // 2, dtype=torch.float, device=query.device)
 
         for i in range(bs):
-            t = torch.arange(start_pos.item() - pad_len[i], start_pos.item() - pad_len[i] + seqlen, dtype=torch.float, device=query.device)
+            pos_beg = position - pad_len[i]
+            pos_end = position - pad_len[i] + seqlen
+            t = torch.arange(pos_beg, pos_end, dtype=torch.float, device=query.device)
             if scaling_type == 'linear':
                 t = t / scaling_factor
+            if scaling_type == 'dynamic' and pos_end > max_position_embeddings:
+                _theta = theta * (
+                    (scaling_factor * pos_end / max_position_embeddings) - (scaling_factor - 1)
+                ) ** (dim / (dim - 2))
+
+            freqs = (1.0 / (_theta ** (torch.arange(0, dim, 2, dtype=torch.float, device=query.device)[: (dim // 2)] / dim)))
             freqs_cis[i] = torch.outer(t, freqs)
 
         cos, sin = freqs_cis.cos().unsqueeze(2), freqs_cis.sin().unsqueeze(2)  # (bs, seqlen, 1, dim / 2)

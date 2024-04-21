@@ -62,7 +62,7 @@ Shape: $(num\\_experts,N)$ or $(num\\_experts,N\\_d)$ for each device $d$ when $
 
 ## Outputs
 
-### `Y`
+### `Y`: tensor(T2)
 
 Output feature of linear transformation.
 
