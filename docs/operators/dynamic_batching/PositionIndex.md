@@ -3,8 +3,9 @@
 
 `dynamic_batching.PositionIndex`, uses `seqstarts` to record the sequence begining position of each batch.
 
-Generating tokens' position indeces of each batch $b$, where $begin = start\\_pos[b]$ and $end = begin + seqstarts[b+1]-seqstarts[b]$
-$$ postion\\_idx = (begin, begin + 1, \cdots, end)$$
+Generating tokens' position indeces of each batch $b$, where $p=start\\_pos[b]$ and $e=p+seqstarts[b+1]-seqstarts[b]$
+
+$$ postion\\_idx = (p, p + 1, \cdots, e)$$
 
 ## Inputs
 
