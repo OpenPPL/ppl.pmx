@@ -6,9 +6,9 @@ For an input $image(batch, channels, height, width)$, firstly apply patch embedd
 
 $$patch={\rm Conv}(image, kernel, stride=patch\\_size)$$
 
-Then we can get the $patch(batch, hidden\\_dim, Gh, Gw)$, where $Gh = height / patch\\_size$ and $Gw = width / patch\\_size$. But the final output of patch embedding is $patch\\_emb = (batch, Gh*Gw, hidden\\_dim)$ so we should apply a transpose with $patch$.
+Then we can get the $patch(batch, hidden\\_dim, Gh, Gw)$, where $Gh = \lfloor height / patch\\_size \rfloor$ and $Gw = \lfloor width / patch\\_size \rfloor$. But the final output of patch embedding is $patch\\_emb = (batch, Gh*Gw, hidden\\_dim)$ so we should apply a transpose with $patch$.
 
-The second type of embedding is class embedding, which is just append an array $cls(hidden\\_dim)$ to $patch\\_emb$
+The second type of embedding is class embedding, which is just appending an array $cls(hidden\\_dim)$ to each batch of $patch\\_emb$
 
 $$cls\\_emb(batch, Gh*Gw+1, hidden\\_dim) = {\rm Cat}(patch\\_emb, cls, dim = -1)$$
 
