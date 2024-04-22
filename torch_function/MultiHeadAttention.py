@@ -64,7 +64,7 @@ class MultiHeadAttention(torch.autograd.Function):
         if is_causal and seqlen_q > 1:
             causal_mask = torch.zeros((1, 1, seqlen_q, seqlen_kv), device=_query.device, dtype=_query.dtype)
             causal_mask[..., -seqlen_q:] = float("-inf")
-            causal_mask[..., -seqlen_q:] = torch.triu(causal_mask[..., -seqlen:], diagonal=1)
+            causal_mask[..., -seqlen_q:] = torch.triu(causal_mask[..., -seqlen_q:], diagonal=1)
         else:
             causal_mask = None
 

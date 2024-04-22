@@ -56,6 +56,7 @@ class RotaryPositionEmbedding(torch.autograd.Function):
             pos_beg = position - pad_len[i]
             pos_end = position - pad_len[i] + seqlen
             t = torch.arange(pos_beg, pos_end, dtype=torch.float, device=query.device)
+            _theta = theta
             if scaling_type == 'linear':
                 t = t / scaling_factor
             if scaling_type == 'dynamic' and pos_end > max_position_embeddings:
