@@ -10,12 +10,12 @@ class Linear(torch.autograd.Function):
         in_features: int, out_features: int):
         print("symbolic")
         if B is not None:
-            Y = g.op("pmx::Linear", X, W, B,
+            Y = g.op("opmx::Linear", X, W, B,
                     in_features_i = in_features,
                     out_features_i = out_features,
                     bias_term_i = True)
         else:
-            Y = g.op("pmx::Linear", X, W,
+            Y = g.op("opmx::Linear", X, W,
                     in_features_i = in_features,
                     out_features_i = out_features,
                     bias_term_i = False)

@@ -5,9 +5,9 @@ class SiLU(torch.autograd.Function):
     @staticmethod
     def symbolic(g, X: torch.Value, gate: torch.Value = None):
         if gate is not None:
-            Y = g.op("pmx::SiLU", X, gate)
+            Y = g.op("opmx::SiLU", X, gate)
         else:
-            Y = g.op("pmx::SiLU", X)
+            Y = g.op("opmx::SiLU", X)
         return Y.setTypeAs(X)
 
 

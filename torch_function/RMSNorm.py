@@ -6,7 +6,7 @@ class RMSNorm(torch.autograd.Function):
     def symbolic(
         g, X: torch.Value, weight: torch.Value,
         axis: int = -1, eps: float = 1e-5):
-        Y = g.op("pmx::RMSNorm", X, weight,
+        Y = g.op("opmx::RMSNorm", X, weight,
                     axis_i = axis, eps_f = eps, skip_term_i = False)
         return Y.setTypeAs(X)
 
@@ -29,11 +29,11 @@ class SkipRMSNorm(torch.autograd.Function):
         g, X: torch.Value, weight: torch.Value, SkipIn: torch.Value = None,
         axis: int = -1, eps: float = 1e-5):
         if SkipIn is None:
-            Y, SkipOut = g.op("pmx::RMSNorm", X, weight,
+            Y, SkipOut = g.op("opmx::RMSNorm", X, weight,
                         axis_i = axis, eps_f = eps, skip_term_i = True,
                         outputs = 2)
         else:
-            Y, SkipOut = g.op("pmx::RMSNorm", X, weight, SkipIn,
+            Y, SkipOut = g.op("opmx::RMSNorm", X, weight, SkipIn,
                         axis_i = axis, eps_f = eps, skip_term_i = True,
                         outputs = 2)
         return Y.setTypeAs(X), SkipOut.setTypeAs(X)

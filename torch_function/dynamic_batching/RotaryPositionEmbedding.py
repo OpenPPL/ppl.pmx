@@ -10,7 +10,7 @@ class RotaryPositionEmbedding(torch.autograd.Function):
                 max_position_embeddings: int = 2048,
                 scaling_type: str = '', scaling_factor: float = 1.0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
-        rotated_query, rotated_key = g.op('pmx.dynamic_batching::RotaryPositionEmbedding',
+        rotated_query, rotated_key = g.op('opmx.dynamic_batching::RotaryPositionEmbedding',
             query, key, seqstarts, start_pos, max_seqlen,
             rotary_dim_i=rotary_dim,
             theta_f=theta,

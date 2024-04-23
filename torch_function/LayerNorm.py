@@ -7,11 +7,11 @@ class LayerNorm(torch.autograd.Function):
         g, X: torch.Value, weight: torch.Value, bias: torch.Value,
         elementwise_affine: bool = False, axis: int = -1, eps: float = 1e-5):
         if elementwise_affine:
-            Y = g.op("pmx::LayerNorm", X, weight, bias,
+            Y = g.op("opmx::LayerNorm", X, weight, bias,
                         elementwise_affine_i = True,
                         axis_i = axis, eps_f = eps, skip_term_i = False)
         else:
-            Y = g.op("pmx::LayerNorm", X,
+            Y = g.op("opmx::LayerNorm", X,
                         elementwise_affine_i = False,
                         axis_i = axis, eps_f = eps, skip_term_i = False)
         return Y.setTypeAs(X)
@@ -41,17 +41,17 @@ class SkipLayerNorm(torch.autograd.Function):
         elementwise_affine: bool = False, axis: int = -1, eps: float = 1e-5):
         if SkipIn is None:
             if elementwise_affine:
-                Y, SkipOut = g.op("pmx::LayerNorm", X, weight, bias,
+                Y, SkipOut = g.op("opmx::LayerNorm", X, weight, bias,
                             elementwise_affine_i = True,
                             axis_i = axis, eps_f = eps, skip_term_i = True,
                             outputs = 2)
             else:
-                Y, SkipOut = g.op("pmx::LayerNorm", X,
+                Y, SkipOut = g.op("opmx::LayerNorm", X,
                             elementwise_affine_i = False,
                             axis_i = axis, eps_f = eps, skip_term_i = True,
                             outputs = 2)
         else:
-            Y, SkipOut = g.op("pmx::LayerNorm", X, weight, bias, SkipIn,
+            Y, SkipOut = g.op("opmx::LayerNorm", X, weight, bias, SkipIn,
                         elementwise_affine_i = elementwise_affine,
                         axis_i = axis, eps_f = eps, skip_term_i = True,
                         outputs = 2)

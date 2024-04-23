@@ -1,6 +1,6 @@
 # Operators
 
-| Domain: pmx |
+| Domain: opmx |
 |  ----  |
 | [ALiBiMask](operators/ALiBiMask.md)  |
 | [ALiBiSlope](operators/ALiBiSlope.md)  |

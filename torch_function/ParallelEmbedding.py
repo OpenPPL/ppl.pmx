@@ -10,7 +10,7 @@ class ParallelEmbedding(torch.autograd.Function):
         g, ids: torch.Value, W: torch.Value, proc_group: torch.Value,
         num_embeddings: int, embedding_dim: int, padding_idx: int = -1,
         max_norm: float = 0, norm_type: float = 2):
-        output = g.op("pmx::ParallelEmbedding", ids, W,
+        output = g.op("opmx::ParallelEmbedding", ids, W,
                 num_embeddings_i = num_embeddings,
                 embedding_dims_i = embedding_dim,
                 padding_idx_i = padding_idx,

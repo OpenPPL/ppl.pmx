@@ -16,7 +16,7 @@ class KeyValueCache(torch.autograd.Function):
         cache_mode: int = 0, cache_layout: int = 0,
         page_size: int = 128):
         if scale is not None:
-             key, value = g.op("pmx.dynamic_batching::KeyValueCache",
+             key, value = g.op("opmx.dynamic_batching::KeyValueCache",
                     current_key, current_value, seqstarts, kvstarts,
                     cachestarts, start_pos, max_seqlen, max_kvlen, cache, scale,
                     num_layer_i = num_layer,
@@ -29,7 +29,7 @@ class KeyValueCache(torch.autograd.Function):
                     page_size_i = page_size,
                     outputs = 2)
         else:
-            key, value = g.op("pmx.dynamic_batching::KeyValueCache",
+            key, value = g.op("opmx.dynamic_batching::KeyValueCache",
                     current_key, current_value, seqstarts, kvstarts,
                     cachestarts, start_pos, max_seqlen, max_kvlen, cache,
                     num_layer_i = num_layer,

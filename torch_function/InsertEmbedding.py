@@ -4,7 +4,7 @@ import torch
 class InsertEmbedding(torch.autograd.Function):
     @staticmethod
     def symbolic(g, X: torch.Value, P: torch.Value, offset: torch.Value):
-        return g.op("pmx::InsertEmbedding", X, P, offset)
+        return g.op("opmx::InsertEmbedding", X, P, offset)
 
 
     @staticmethod

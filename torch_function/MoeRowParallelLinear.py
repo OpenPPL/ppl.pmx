@@ -10,14 +10,14 @@ class MoeRowParallelLinear(torch.autograd.Function):
         W: torch.Value, B: torch.Value, proc_group: dist.ProcessGroup, num_experts: int, 
         in_features: int, out_features: int, input_is_parallel: bool = False):
         if B is not None:
-            Y = g.op("pmx::MoeRowParallelLinear", X, expert_offset, W, B,
+            Y = g.op("opmx::MoeRowParallelLinear", X, expert_offset, W, B,
                      num_experts_i = num_experts,
                      in_features_i = in_features,
                      out_features_i = out_features,
                      bias_term_i = True,
                      input_is_parallel_i = input_is_parallel)
         else:
-            Y = g.op("pmx::MoeRowParallelLinear", X, expert_offset, W,
+            Y = g.op("opmx::MoeRowParallelLinear", X, expert_offset, W,
                      num_experts_i = num_experts,
                      in_features_i = in_features,
                      out_features_i = out_features,

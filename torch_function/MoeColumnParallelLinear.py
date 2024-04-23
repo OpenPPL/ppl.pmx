@@ -11,14 +11,14 @@ class MoeColumnParallelLinear(torch.autograd.Function):
         W: torch.Value, B: torch.Value, proc_group: dist.ProcessGroup,
         num_experts: int, in_features: int, out_features: int, gather_output: bool = True):
         if B is not None:
-            Y = g.op("pmx::MoeColumnParallelLinear", X, expert_offset, W, B, 
+            Y = g.op("opmx::MoeColumnParallelLinear", X, expert_offset, W, B, 
                                 num_experts_i = num_experts,
                                 in_features_i = in_features,
                                 out_features_i = out_features,
                                 bias_term_i = True,
                                 gather_output_i = gather_output)
         else:
-            Y = g.op("pmx::MoeColumnParallelLinear", X, expert_offset, W, 
+            Y = g.op("opmx::MoeColumnParallelLinear", X, expert_offset, W, 
                                 num_experts_i = num_experts,
                                 in_features_i = in_features,
                                 out_features_i = out_features,

@@ -8,7 +8,7 @@ class MoeSelect(torch.autograd.Function):
         num_experts: int, num_experts_per_token: int):
 
         X_expand_permute, expert_weights, invert_permutation, expert_offset = (
-            g.op("pmx::MoeSelect", X, scores, 
+            g.op("opmx::MoeSelect", X, scores, 
                 num_experts_i=num_experts,
                 num_experts_per_token_i=num_experts_per_token, 
                 outputs = 4)

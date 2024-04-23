@@ -12,23 +12,23 @@ Due to the inconsistency with the implementation of Hugging Face's RotaryPositio
 python ConvertBaichuan7BToPmx.py --input_dir <hf_model_dir> --output_dir <pmx_model_dir>
 ```
 
-you can find pmx model file in`<pmx_model_dir>` after the conversion.
+you can find opmx model file in`<pmx_model_dir>` after the conversion.
 
 ## Spliting model
 
-[SplitModel.py](https://github.com/openppl-public/ppl.pmx/blob/master/model_zoo/llama/modeling/SplitModel.py) is a Python script that splits a PMX model's weights into multiple shards. The script reads a PMX model's weights and divides them into specified shards, creating separate models for each shard.
+[SplitModel.py](https://github.com/openppl-public/ppl.opmx/blob/master/model_zoo/llama/modeling/SplitModel.py) is a Python script that splits a OPMX model's weights into multiple shards. The script reads a OPMX model's weights and divides them into specified shards, creating separate models for each shard.
 
 ```bash
 python SplitModel.py --input_dir <input_directory_path> --num_shards <number_of_shards> --output_dir <output_directory_path>
 ```
 
-- `input_dir`: Location of PMX model weights. Ensure that the directory contains the file 'pmx_params.json'.
+- `input_dir`: Location of OPMX model weights. Ensure that the directory contains the file 'opmx_params.json'.
 - `num_shards`: Number of shards to split the weights into.
 - `output_dir`: Directory to save the resulting shard models.
 
 ## Merging model
 
-[MergeModel.py](https://github.com/openppl-public/ppl.pmx/blob/master/model_zoo/llama/modeling/MergeModel.py) is a Python script that merges weights of a sharded model into a single model. The script reads the weights from multiple shards of a model and creates a consolidated model with combined weights.
+[MergeModel.py](https://github.com/openppl-public/ppl.opmx/blob/master/model_zoo/llama/modeling/MergeModel.py) is a Python script that merges weights of a sharded model into a single model. The script reads the weights from multiple shards of a model and creates a consolidated model with combined weights.
 
 ```bash
 python MergeModel.py --input_dir <input_directory_path> --num_shards <number_of_shards> --output_dir <output_directory_path>
@@ -36,7 +36,7 @@ python MergeModel.py --input_dir <input_directory_path> --num_shards <number_of_
 
 - `input_dir`: Location of model weights, containing multiple files ending in '.pth'.
 - `num_shards`: Number of shards to merge.
-- `output_dir`: Directory to write the merged PMX model.
+- `output_dir`: Directory to write the merged OPMX model.
 
 ## Testing Model
 

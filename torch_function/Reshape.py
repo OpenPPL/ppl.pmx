@@ -6,7 +6,7 @@ from typing import Sequence, Union
 class Reshape(torch.autograd.Function):
     @staticmethod
     def symbolic(g, input: torch.Value, shape: torch.Value):
-        reshaped = g.op("pmx::Reshape", input, shape)
+        reshaped = g.op("opmx::Reshape", input, shape)
         return reshaped
 
 

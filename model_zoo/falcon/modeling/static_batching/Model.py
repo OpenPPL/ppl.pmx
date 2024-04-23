@@ -9,7 +9,7 @@ from typing import Mapping, Any, Optional
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
-import torch_function as PMX
+import torch_function as OPMX
 from ModelParams import ModelParams
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding
@@ -25,7 +25,7 @@ class LayerNorm(torch.nn.Module):
         self.bias = torch.nn.Parameter(torch.zeros(dim))
 
     def forward(self, x):
-        return PMX.layer_norm(x, self.weight, self.bias, -1, self.eps)
+        return OPMX.layer_norm(x, self.weight, self.bias, -1, self.eps)
 
 
 class Attention(nn.Module):
@@ -85,25 +85,25 @@ class Attention(nn.Module):
         expanded_shape = (0, 0, -1, self.head_dim)
         if self.fused_qkv:
             xqkv = self.wqkv(x)
-            xqkv = PMX.reshape(xqkv, expanded_shape)
+            xqkv = OPMX.reshape(xqkv, expanded_shape)
             # TensorDumper.dump(xqkv, "layer{}_reshaped_xqkv".format(self.layer_id))
             split_size = (self.num_local_heads, self.num_local_kv_heads, self.num_local_kv_heads)
             xq, xk, xv = torch.split(xqkv, split_size, -2)
         else:
             xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
-            xq = PMX.reshape(xq, expanded_shape)
-            xk = PMX.reshape(xk, expanded_shape)
-            xv = PMX.reshape(xv, expanded_shape)
+            xq = OPMX.reshape(xq, expanded_shape)
+            xk = OPMX.reshape(xk, expanded_shape)
+            xv = OPMX.reshape(xv, expanded_shape)
         # TensorDumper.dump(xq, "layer{}_reshaped_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
-        xq, xk = PMX.rotary_position_embedding(xq, xk, start_pos, rotary_dim=self.rotary_dim)
+        xq, xk = OPMX.rotary_position_embedding(xq, xk, start_pos, rotary_dim=self.rotary_dim)
         # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
         if self.fused_kvcache:
-            attn = PMX.multi_head_cache_attention(
+            attn = OPMX.multi_head_cache_attention(
                 xq, xk, xv, start_pos, kv_cache, kv_scale, attn_mask,
                 num_heads=self.num_local_heads,
                 head_dim=self.head_dim,
@@ -115,7 +115,7 @@ class Attention(nn.Module):
                 quant_group=self.cache_quant_group,
                 cache_layout=self.cache_layout)
         else:
-            keys, values = PMX.key_value_cache(xk, xv, start_pos,
+            keys, values = OPMX.key_value_cache(xk, xv, start_pos,
                                             kv_cache, kv_scale,
                                             num_layer=self.num_layers,
                                             layer_idx=self.layer_id,
@@ -127,7 +127,7 @@ class Attention(nn.Module):
             # TensorDumper.dump(kv_scale, "layer{}_modified_kv_scale".format(self.layer_id))
             # TensorDumper.dump(keys, "layer{}_key_value_cache_out_keys".format(self.layer_id))
             # TensorDumper.dump(values, "layer{}_key_value_cache_out_values".format(self.layer_id))
-            attn = PMX.multi_head_attention(xq, keys, values,
+            attn = OPMX.multi_head_attention(xq, keys, values,
                                             attn_mask=attn_mask,
                                             num_heads=self.num_local_heads,
                                             head_dim=self.head_dim,
@@ -135,7 +135,7 @@ class Attention(nn.Module):
                                             num_kv_heads=0 if self.friendly_gqa else self.num_local_kv_heads)
         # TensorDumper.dump(attn, "layer{}_multi_head_attention_out".format(self.layer_id))
 
-        output = self.wo(PMX.reshape(attn, (0, 0, -1)))
+        output = self.wo(OPMX.reshape(attn, (0, 0, -1)))
         # TensorDumper.dump(output, "layer{}_reshaped_wo_out".format(self.layer_id))
 
         return output
@@ -162,7 +162,7 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         x1 = self.w1(x)
-        x1 = PMX.gelu(x1, approximate=True)
+        x1 = OPMX.gelu(x1, approximate=True)
         # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
         output = self.w2(x1)
         # TensorDumper.dump(output, "layer{}_ffn_w2".format(self.layer_id))

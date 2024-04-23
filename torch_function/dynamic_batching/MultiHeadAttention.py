@@ -14,7 +14,7 @@ class MultiHeadAttention(torch.autograd.Function):
                  num_kv_heads: int = 0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if attn_mask is not None:
-            output = g.op('pmx.dynamic_batching::MultiHeadAttention',
+            output = g.op('opmx.dynamic_batching::MultiHeadAttention',
                 query, key, value, seqstarts,
                 kvstarts, decoding_batches,
                 max_seqlen, max_kvlen, attn_mask,
@@ -24,7 +24,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 is_alibi_i=is_alibi,
                 num_kv_heads_i=num_kv_heads)
         else:
-            output = g.op('pmx.dynamic_batching::MultiHeadAttention',
+            output = g.op('opmx.dynamic_batching::MultiHeadAttention',
                 query, key, value, seqstarts,
                 kvstarts, decoding_batches,
                 max_seqlen, max_kvlen,

@@ -8,7 +8,7 @@ class Rotary2DPositionEmbedding(torch.autograd.Function):
                 max_seqlen: torch.Value, first_seq_len: torch.Value,
                 theta: float = 10000.0, bypass_key: bool = False):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
-        rotated_query, rotated_key = g.op('pmx.dynamic_batching::Rotary2DPositionEmbedding',
+        rotated_query, rotated_key = g.op('opmx.dynamic_batching::Rotary2DPositionEmbedding',
             query, key, seqstarts, start_pos, max_seqlen, first_seq_len,
             theta_f=theta,
             bypass_key_i=bypass_key,

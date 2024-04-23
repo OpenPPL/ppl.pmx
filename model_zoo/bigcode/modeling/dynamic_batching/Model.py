@@ -9,7 +9,7 @@ from typing import Mapping, Any, Optional
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
-import torch_function as PMX
+import torch_function as OPMX
 from ModelParams import ModelParams
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding
@@ -25,7 +25,7 @@ class SkipLayerNorm(torch.nn.Module):
         self.bias = torch.nn.Parameter(torch.zeros(dim))
 
     def forward(self, x, skip):
-        return PMX.skip_layer_norm(x, self.weight, self.bias, skip, -1, self.eps)
+        return OPMX.skip_layer_norm(x, self.weight, self.bias, skip, -1, self.eps)
 
 
 class Attention(nn.Module):
@@ -89,21 +89,21 @@ class Attention(nn.Module):
         expanded_shape = (0, -1, self.head_dim)
         if self.fused_qkv:
             xqkv = self.wqkv(x)
-            xqkv = PMX.reshape(xqkv, expanded_shape)
+            xqkv = OPMX.reshape(xqkv, expanded_shape)
             split_size = (self.num_local_heads, self.num_local_kv_heads, self.num_local_kv_heads)
             # TensorDumper.dump(xqkv, "layer{}_reshaped_xqkv".format(self.layer_id))
             xq, xk, xv = torch.split(xqkv, split_size, -2)
         else:
             xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
-            xq = PMX.reshape(xq, expanded_shape)
-            xk = PMX.reshape(xk, expanded_shape)
-            xv = PMX.reshape(xv, expanded_shape)
+            xq = OPMX.reshape(xq, expanded_shape)
+            xk = OPMX.reshape(xk, expanded_shape)
+            xv = OPMX.reshape(xv, expanded_shape)
         # TensorDumper.dump(xq, "layer{}_reshaped_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
         if self.fused_kvcache:
-            attn = PMX.dynamic_batching.multi_head_cache_attention(
+            attn = OPMX.dynamic_batching.multi_head_cache_attention(
                 xq, xk, xv, seqstarts, kvstarts,
                 cachestarts, start_pos,
                 decoding_batches,
@@ -121,7 +121,7 @@ class Attention(nn.Module):
                 cache_mode=self.cache_mode,
                 cache_layout=self.cache_layout)
         else:
-            keys, values = PMX.dynamic_batching.key_value_cache(
+            keys, values = OPMX.dynamic_batching.key_value_cache(
                                             xk, xv, seqstarts, kvstarts,
                                             cachestarts, start_pos,
                                             max_seqlen, max_kvlen,
@@ -137,7 +137,7 @@ class Attention(nn.Module):
             # TensorDumper.dump(kv_scale, "layer{}_modified_kv_scale".format(self.layer_id))
             # TensorDumper.dump(keys, "layer{}_key_value_cache_out_keys".format(self.layer_id))
             # TensorDumper.dump(values, "layer{}_key_value_cache_out_values".format(self.layer_id))
-            attn = PMX.dynamic_batching.multi_head_attention(
+            attn = OPMX.dynamic_batching.multi_head_attention(
                                             xq, keys, values,
                                             seqstarts, kvstarts,
                                             decoding_batches,
@@ -147,7 +147,7 @@ class Attention(nn.Module):
                                             head_dim=self.head_dim,
                                             is_causal=self.auto_causal,
                                             num_kv_heads=0 if self.friendly_gqa else self.num_local_kv_heads)
-        attn = PMX.reshape(attn, (0, -1))
+        attn = OPMX.reshape(attn, (0, -1))
         # TensorDumper.dump(attn, "layer{}_multi_head_attention_out".format(self.layer_id))
 
         output = self.wo(attn)
@@ -178,7 +178,7 @@ class FeedForward(nn.Module):
     def forward(self, x):
         x1 = self.w1(x)
         # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
-        x1 = PMX.gelu(x1, approximate=True)
+        x1 = OPMX.gelu(x1, approximate=True)
         # TensorDumper.dump(x3, "layer{}_ffn_w3".format(self.layer_id))
         output = self.w2(x1)
         # TensorDumper.dump(output, "layer{}_ffn_w2".format(self.layer_id))
@@ -294,7 +294,7 @@ class Transformer(nn.Module):
                 max_seqlen: torch.Tensor,  max_kvlen: torch.Tensor,
                 kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
 
-        pos_idx = PMX.dynamic_batching.position_index(
+        pos_idx = OPMX.dynamic_batching.position_index(
             tokens, seqstarts, start_pos, max_seqlen)
         h = self.tok_embeddings(tokens) + self.pos_embeddings(pos_idx)
         # TensorDumper.dump(h, "emb_out")

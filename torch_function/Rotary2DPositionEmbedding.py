@@ -7,13 +7,13 @@ class Rotary2DPositionEmbedding(torch.autograd.Function):
                  first_seq_len: torch.Value, pad_len: torch.Value = None,
                  theta: float = 10000.0, bypass_key: bool = False) -> torch.Value:
         if pad_len is not None:
-            rotated_query, rotated_key = g.op('pmx::Rotary2DPositionEmbedding',
+            rotated_query, rotated_key = g.op('opmx::Rotary2DPositionEmbedding',
                                     query, key, start_pos, first_seq_len,
                                     pad_len, theta_f=theta,
                                     bypass_key_i=bypass_key,
                                     outputs=2)
         else:
-            rotated_query, rotated_key = g.op('pmx::Rotary2DPositionEmbedding',
+            rotated_query, rotated_key = g.op('opmx::Rotary2DPositionEmbedding',
                                     query, key, start_pos, first_seq_len,
                                     theta_f=theta,
                                     bypass_key_i=bypass_key,

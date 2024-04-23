@@ -20,7 +20,7 @@ def write_json(text, path):
 
 def merge_pmx_model(model_path, input_base_path, num_shards):
     os.makedirs(model_path, exist_ok=True)
-    params = read_json(os.path.join(input_base_path, "pmx_params.json"))
+    params = read_json(os.path.join(input_base_path, "opmx_params.json"))
     # weight sharding
     hidden_dim = params['hidden_dim']
     intermediate_dim = params['intermediate_dim']
@@ -31,7 +31,7 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
     key_value_dim = hidden_dim
     num_key_value_heads = params['num_kv_heads'] if 'num_kv_heads' in params else params['num_heads']
     dims_per_head = hidden_dim // params['num_heads']
-    write_json(params, os.path.join(model_path, "pmx_params.json"))
+    write_json(params, os.path.join(model_path, "opmx_params.json"))
 
     checkpoints = sorted(Path(input_base_path).glob("*.pth"))
     assert num_shards == len(
@@ -103,7 +103,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--input_dir",
-        help="Location of pmx weights, which contains model folders",
+        help="Location of opmx weights, which contains model folders",
     )
     parser.add_argument(
         "--num_shards",
@@ -112,7 +112,7 @@ def main():
     )
     parser.add_argument(
         "--output_dir",
-        help="Location to write PMX model",
+        help="Location to write OPMX model",
     )
     args = parser.parse_args()
     merge_pmx_model(

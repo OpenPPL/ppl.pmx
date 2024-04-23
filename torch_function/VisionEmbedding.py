@@ -8,7 +8,7 @@ class VisionEmbedding(torch.autograd.Function):
     def symbolic(g, pixel_values: torch.Value, class_weight: torch.Value,
                  patch_weight: torch.Value, position_weight: torch.Value,
                  hidden_dim: int, patch_size: int):
-        output = g.op('pmx::VisionEmbedding',
+        output = g.op('opmx::VisionEmbedding',
                       pixel_values, class_weight,
                       patch_weight, position_weight,
                       hidden_dim_i=hidden_dim,

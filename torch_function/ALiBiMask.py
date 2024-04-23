@@ -14,13 +14,13 @@ class ALiBiMask(torch.autograd.Function):
                  attention_mask: Optional[torch.Value], num_heads: int, data_type: torch.dtype):
         data_type_onnx = torch2onnx_dtype[data_type]
         if attention_mask is not None:
-            alibi_mask = g.op('pmx::ALiBiMask',
+            alibi_mask = g.op('opmx::ALiBiMask',
                           seqlen_q, seqlen_kv,
                           attention_mask,
                           num_heads_i = num_heads,
                           data_type_i = data_type_onnx)
         else:
-            alibi_mask = g.op('pmx::ALiBiMask',
+            alibi_mask = g.op('opmx::ALiBiMask',
                           seqlen_q, seqlen_kv,
                           num_heads_i = num_heads,
                           data_type_i = data_type_onnx)

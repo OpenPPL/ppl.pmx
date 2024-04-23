@@ -23,7 +23,7 @@ def main(
     dynamic_batching: bool = True, # use dynamic batching scheduling
 ):
     
-    with open(Path(ckpt_dir) / "pmx_params.json", "r") as f:
+    with open(Path(ckpt_dir) / "opmx_params.json", "r") as f:
         params = json.loads(f.read())
     params: ModelParams = ModelParams(**params)
 

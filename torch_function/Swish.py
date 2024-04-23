@@ -5,9 +5,9 @@ class Swish(torch.autograd.Function):
     @staticmethod
     def symbolic(g, X: torch.Value, gate: torch.Value = None, beta: float = 1.0):
         if gate is not None:
-            Y = g.op("pmx::Swish", X, gate, beta_f = beta)
+            Y = g.op("opmx::Swish", X, gate, beta_f = beta)
         else:
-            Y = g.op("pmx::Swish", X, beta_f = beta)
+            Y = g.op("opmx::Swish", X, beta_f = beta)
         return Y.setTypeAs(X)
 
 
