@@ -21,7 +21,6 @@
 | [Reshape](operators/Reshape.md)  |
 | [RMSNorm](operators/RMSNorm.md)  |
 | [RotaryPositionEmbedding](operators/RotaryPositionEmbedding.md)  |
-| [Rotary2DPositionEmbedding](operators/Rotary2DPositionEmbedding.md)  |
 | [RowParallelLinear](operators/RowParallelLinear.md)  |
 | [SiLU](operators/SiLU.md)  |
 | [SwiGLU](operators/SwiGLU.md)  |
@@ -31,4 +30,5 @@
 | [dynamic_batching.KeyValueCache](operators/dynamic_batching/KeyValueCache.md)  |
 | [dynamic_batching.MultiHeadAttention](operators/dynamic_batching/MultiHeadAttention.md)  |
 | [dynamic_batching.MultiHeadCacheAttention](operators/dynamic_batching/MultiHeadCacheAttention.md)  |
+| [dynamic_batching.PositionIndex](operators/dynamic_batching/PositionIndex.md)  |
 | [dynamic_batching.RotaryPositionEmbedding](operators/dynamic_batching/RotaryPositionEmbedding.md)  |
