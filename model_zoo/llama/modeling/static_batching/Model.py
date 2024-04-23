@@ -9,7 +9,7 @@ from typing import Mapping, Any, Optional
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
-import torch_function as PMX
+import torch_function as OPMX
 from ModelParams import ModelParams
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding
@@ -23,7 +23,7 @@ class RMSNorm(torch.nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def forward(self, x):
-        return PMX.rms_norm(x, self.weight, -1, self.eps)
+        return OPMX.rms_norm(x, self.weight, -1, self.eps)
 
 
 class SkipRMSNorm(torch.nn.Module):
@@ -33,7 +33,7 @@ class SkipRMSNorm(torch.nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def forward(self, x, skip):
-        return PMX.skip_rms_norm(x, self.weight, skip, -1, self.eps)
+        return OPMX.skip_rms_norm(x, self.weight, skip, -1, self.eps)
 
 
 class Attention(nn.Module):
@@ -107,21 +107,21 @@ class Attention(nn.Module):
             xqkv = self.wqkv(x)
             #import ipdb;ipdb.set_trace()
 
-            xqkv = PMX.reshape(xqkv, expanded_shape)
+            xqkv = OPMX.reshape(xqkv, expanded_shape)
             # TensorDumper.dump(xqkv, "layer{}_reshaped_xqkv".format(self.layer_id))
             split_size = (self.num_local_heads, self.num_local_kv_heads, self.num_local_kv_heads)
             xq, xk, xv = torch.split(xqkv, split_size, -2)
         else:
             xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
-            xq = PMX.reshape(xq, expanded_shape)
-            xk = PMX.reshape(xk, expanded_shape)
-            xv = PMX.reshape(xv, expanded_shape)
+            xq = OPMX.reshape(xq, expanded_shape)
+            xk = OPMX.reshape(xk, expanded_shape)
+            xv = OPMX.reshape(xv, expanded_shape)
         # TensorDumper.dump(xq, "layer{}_reshaped_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
         if self.with_rope:
-            xq, xk = PMX.rotary_position_embedding(xq, xk, start_pos, rotary_dim=self.rotary_dim,
+            xq, xk = OPMX.rotary_position_embedding(xq, xk, start_pos, rotary_dim=self.rotary_dim,
                                                 max_position_embeddings=self.max_position_embeddings,
                                                 theta=self.rope_theta, scaling_type=self.rope_scaling_type,
                                                 scaling_factor=self.rope_scaling_factor)
@@ -129,7 +129,7 @@ class Attention(nn.Module):
             # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
         if self.fused_kvcache:
-            attn = PMX.multi_head_cache_attention(
+            attn = OPMX.multi_head_cache_attention(
                 xq, xk, xv, start_pos, kv_cache, kv_scale, attn_mask,
                 num_heads=self.num_local_heads,
                 head_dim=self.head_dim,
@@ -142,7 +142,7 @@ class Attention(nn.Module):
                 quant_group=self.cache_quant_group,
                 cache_layout=self.cache_layout)
         else:
-            keys, values = PMX.key_value_cache(xk, xv, start_pos,
+            keys, values = OPMX.key_value_cache(xk, xv, start_pos,
                                             kv_cache, kv_scale,
                                             num_layer=self.num_layers,
                                             layer_idx=self.layer_id,
@@ -154,7 +154,7 @@ class Attention(nn.Module):
             # TensorDumper.dump(kv_scale, "layer{}_modified_kv_scale".format(self.layer_id))
             # TensorDumper.dump(keys, "layer{}_key_value_cache_out_keys".format(self.layer_id))
             # TensorDumper.dump(values, "layer{}_key_value_cache_out_values".format(self.layer_id))
-            attn = PMX.multi_head_attention(xq, keys, values,
+            attn = OPMX.multi_head_attention(xq, keys, values,
                                             attn_mask=attn_mask,
                                             num_heads=self.num_local_heads,
                                             head_dim=self.head_dim,
@@ -163,7 +163,7 @@ class Attention(nn.Module):
                                             num_kv_heads=0 if self.friendly_gqa else self.num_local_kv_heads)
         # TensorDumper.dump(attn, "layer{}_multi_head_attention_out".format(self.layer_id))
 
-        output = self.wo(PMX.reshape(attn, (0, 0, -1)))
+        output = self.wo(OPMX.reshape(attn, (0, 0, -1)))
         # TensorDumper.dump(output, "layer{}_reshaped_wo_out".format(self.layer_id))
 
         return output
@@ -202,13 +202,13 @@ class FeedForward(nn.Module):
         if self.fused_ffn_glu:
             x13 = self.wu(x)
             # TensorDumper.dump(x13, "layer{}_ffn_wu".format(self.layer_id))
-            x13 = PMX.swiglu(x13)
+            x13 = OPMX.swiglu(x13)
         else:
             x1 = self.w1(x)
             # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
             x3 = self.w3(x)
             # TensorDumper.dump(x3, "layer{}_ffn_w3".format(self.layer_id))
-            x13 = PMX.silu(x1, x3)
+            x13 = OPMX.silu(x1, x3)
         # TensorDumper.dump(x13, "layer{}_ffn_mul_silu".format(self.layer_id))
         output = self.w2(x13)
         # TensorDumper.dump(output, "layer{}_ffn_w2".format(self.layer_id))
@@ -344,7 +344,7 @@ class Transformer(nn.Module):
             TensorDumper.dump(kv_scale, "kv_scale")
 
         if self.with_alibi and not self.fused_alibi:
-            attn_mask = PMX.alibi_mask(
+            attn_mask = OPMX.alibi_mask(
                 torch.tensor(tokens.shape[1], dtype=torch.int64),
                 torch.tensor(tokens.shape[1], dtype=torch.int64) + start_pos, attn_mask, self.params.num_heads, h.dtype)
             # TensorDumper.dump(attn_mask, "alibi_mask")

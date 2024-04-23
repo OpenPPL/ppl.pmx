@@ -9,7 +9,7 @@ from typing import Mapping, Any, Optional
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
-import torch_function as PMX
+import torch_function as OPMX
 from ModelParams import ModelParams
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding, MoeColumnParallelLinear, MoeRowParallelLinear
@@ -79,28 +79,28 @@ class Attention(nn.Module):
         expanded_shape = (0, -1, self.head_dim)
         if self.fused_qkv:
             xqkv = self.wqkv(x)
-            xqkv = PMX.reshape(xqkv, expanded_shape)
+            xqkv = OPMX.reshape(xqkv, expanded_shape)
             split_size = (self.num_local_heads, self.num_local_kv_heads, self.num_local_kv_heads)
             # TensorDumper.dump(xqkv, "layer{}_reshaped_xqkv".format(self.layer_id))
             xq, xk, xv = torch.split(xqkv, split_size, -2)
         else:
             xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
-            xq = PMX.reshape(xq, expanded_shape)
-            xk = PMX.reshape(xk, expanded_shape)
-            xv = PMX.reshape(xv, expanded_shape)
+            xq = OPMX.reshape(xq, expanded_shape)
+            xk = OPMX.reshape(xk, expanded_shape)
+            xv = OPMX.reshape(xv, expanded_shape)
         # TensorDumper.dump(xq, "layer{}_reshaped_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
 
-        xq, xk = PMX.dynamic_batching.rotary_position_embedding(
+        xq, xk = OPMX.dynamic_batching.rotary_position_embedding(
             xq, xk, seqstarts,start_pos, max_seqlen, 
             self.rotary_dim, theta=self.rope_theta)
         # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
         if self.fused_kvcache:
-            attn = PMX.dynamic_batching.multi_head_cache_attention(
+            attn = OPMX.dynamic_batching.multi_head_cache_attention(
                 xq, xk, xv, seqstarts, kvstarts,
                 cachestarts, start_pos,
                 decoding_batches,
@@ -118,7 +118,7 @@ class Attention(nn.Module):
                 cache_mode=self.cache_mode,
                 cache_layout=self.cache_layout)
         else:
-            keys, values = PMX.dynamic_batching.key_value_cache(
+            keys, values = OPMX.dynamic_batching.key_value_cache(
                                             xk, xv, seqstarts, kvstarts,
                                             cachestarts, start_pos,
                                             max_seqlen, max_kvlen,
@@ -134,7 +134,7 @@ class Attention(nn.Module):
             # TensorDumper.dump(kv_scale, "layer{}_modified_kv_scale".format(self.layer_id))
             # TensorDumper.dump(keys, "layer{}_key_value_cache_out_keys".format(self.layer_id))
             # TensorDumper.dump(values, "layer{}_key_value_cache_out_values".format(self.layer_id))
-            attn = PMX.dynamic_batching.multi_head_attention(
+            attn = OPMX.dynamic_batching.multi_head_attention(
                                             xq, keys, values,
                                             seqstarts, kvstarts,
                                             decoding_batches,
@@ -144,7 +144,7 @@ class Attention(nn.Module):
                                             head_dim=self.head_dim,
                                             is_causal=self.auto_causal,
                                             num_kv_heads=0 if self.friendly_gqa else self.num_local_kv_heads)
-        attn = PMX.reshape(attn, (0, -1))
+        attn = OPMX.reshape(attn, (0, -1))
         # TensorDumper.dump(attn, "layer{}_multi_head_attention_out".format(self.layer_id))
 
         output = self.wo(attn)
@@ -188,7 +188,7 @@ class MoeFeedForward(nn.Module):
         router_logits = self.gate(x)
         # TensorDumper.dump(router_logits, "layer{}_ffn_gate_score".format(self.layer_id))
 
-        x_experts, expert_weights, invert_permutation, expert_offset = PMX.moe_select(x, router_logits, self.num_experts, self.num_experts_per_token)
+        x_experts, expert_weights, invert_permutation, expert_offset = OPMX.moe_select(x, router_logits, self.num_experts, self.num_experts_per_token)
         # TensorDumper.dump(x_experts, "layer{}_ffn_moe_expanded_x".format(self.layer_id))
         # TensorDumper.dump(expert_weights, "layer{}_ffn_moe_expert_weights".format(self.layer_id))
         # TensorDumper.dump(invert_permutation, "layer{}_ffn_moe_inv_perm".format(self.layer_id))
@@ -197,18 +197,18 @@ class MoeFeedForward(nn.Module):
         if self.fused_ffn_glu:
             x13 = self.wu(x_experts, expert_offset)
             # TensorDumper.dump(x13, "layer{}_ffn_wu".format(self.layer_id))
-            x13 = PMX.swiglu(x13)
+            x13 = OPMX.swiglu(x13)
         else:
             x1 = self.w1(x_experts, expert_offset)
             # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
             x3 = self.w3(x_experts, expert_offset)
             # TensorDumper.dump(x3, "layer{}_ffn_w3".format(self.layer_id))
-            x13 = PMX.silu(x1, x3)
+            x13 = OPMX.silu(x1, x3)
             # TensorDumper.dump(x13, "layer{}_ffn_mul_silu".format(self.layer_id))
         x_out = self.w2(x13, expert_offset)
         # TensorDumper.dump(x_out, "layer{}_ffn_w2".format(self.layer_id))
 
-        output = PMX.moe_reduce(x_out, expert_weights, invert_permutation, self.num_experts_per_token)
+        output = OPMX.moe_reduce(x_out, expert_weights, invert_permutation, self.num_experts_per_token)
         # TensorDumper.dump(output, "layer{}_ffn_output".format(self.layer_id))
 
         return output

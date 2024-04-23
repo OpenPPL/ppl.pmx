@@ -22,7 +22,7 @@ def write_json(text, path):
 
 def split_pmx_model(model_path, input_base_path, num_shards):
     os.makedirs(model_path, exist_ok=True)
-    params = read_json((os.path.join(input_base_path, "pmx_params.json")))
+    params = read_json((os.path.join(input_base_path, "opmx_params.json")))
     # weight sharding
     hidden_dim = params['hidden_dim']
     intermediate_dim = params['intermediate_dim']
@@ -34,7 +34,7 @@ def split_pmx_model(model_path, input_base_path, num_shards):
     dims_per_head = hidden_dim // params['num_heads']
     key_value_dim = dims_per_head * num_kv_heads
 
-    write_json(params, os.path.join(model_path, "pmx_params.json"))
+    write_json(params, os.path.join(model_path, "opmx_params.json"))
 
     state_dict = {}
     for ckpt_path in sorted(Path(input_base_path).glob("*.pth")):
@@ -96,7 +96,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--input_dir",
-        help="Location of pmx weights, which contains model folders",
+        help="Location of opmx weights, which contains model folders",
     )
     parser.add_argument(
         "--num_shards",
@@ -105,7 +105,7 @@ def main():
     )
     parser.add_argument(
         "--output_dir",
-        help="Location to write PMX model",
+        help="Location to write OPMX model",
     )
     args = parser.parse_args()
     split_pmx_model(

@@ -4,7 +4,7 @@ import torch
 class SwiGLU(torch.autograd.Function):
     @staticmethod
     def symbolic(g, X: torch.Value, beta: float = 1.0):
-        Y = g.op("pmx::SwiGLU", X, beta_f = beta)
+        Y = g.op("opmx::SwiGLU", X, beta_f = beta)
         return Y
 
 

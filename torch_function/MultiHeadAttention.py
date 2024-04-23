@@ -9,7 +9,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 num_heads: int, head_dim: int, is_causal: bool = True, is_alibi: bool = False, num_kv_heads: int = 0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if attn_mask is not None:
-            output = g.op('pmx::MultiHeadAttention',
+            output = g.op('opmx::MultiHeadAttention',
                 query, key, value, attn_mask,
                 num_heads_i=num_heads,
                 head_dim_i=head_dim,
@@ -17,7 +17,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 is_alibi_i=is_alibi,
                 num_kv_heads_i=num_kv_heads)
         else:
-            output = g.op('pmx::MultiHeadAttention',
+            output = g.op('opmx::MultiHeadAttention',
                 query, key, value,
                 num_heads_i=num_heads,
                 head_dim_i=head_dim,

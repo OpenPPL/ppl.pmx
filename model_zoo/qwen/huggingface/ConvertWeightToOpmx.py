@@ -51,7 +51,7 @@ def write_pmx_model(model_path, input_base_path):
     os.makedirs(model_path, exist_ok=True)
     print ("Loading the checkpoint in a HF model")
 
-    # convert pmx params
+    # convert opmx params
     pmx_params_dict = {}
     params = read_json((os.path.join(input_base_path, "config.json")))
     pmx_params_dict['hidden_dim'] = params['hidden_size']
@@ -61,7 +61,7 @@ def write_pmx_model(model_path, input_base_path):
     pmx_params_dict['vocab_size'] = params['vocab_size']
     pmx_params_dict['num_kv_heads'] = params.get('num_key_value_heads', params['num_attention_heads'])
     pmx_params_dict['intermediate_dim'] = params.get("intermediate_size") // 2
-    write_json(pmx_params_dict, os.path.join(model_path, "pmx_params.json"))
+    write_json(pmx_params_dict, os.path.join(model_path, "opmx_params.json"))
 
     # load weights
     def unpermute(w, n_heads=pmx_params_dict['num_heads'], dim1=pmx_params_dict['hidden_dim'], dim2=pmx_params_dict['hidden_dim']):
@@ -126,7 +126,7 @@ def main():
     )
     parser.add_argument(
         "--output_dir",
-        help="Location to write PMX model",
+        help="Location to write OPMX model",
     )
     args = parser.parse_args()
     write_pmx_model(

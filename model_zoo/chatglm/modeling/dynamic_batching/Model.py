@@ -8,7 +8,7 @@ from typing import Mapping, Any, Optional
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
-import torch_function as PMX
+import torch_function as OPMX
 from ModelParams import ModelParams
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding
@@ -23,7 +23,7 @@ class LayerNorm(torch.nn.Module):
         self.bias = torch.nn.Parameter(torch.zeros(dim))
 
     def forward(self, X: torch.Tensor):
-            return PMX.layer_norm(X, self.weight, self.bias, -1, self.eps)
+            return OPMX.layer_norm(X, self.weight, self.bias, -1, self.eps)
 
 class SkipLayerNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-5) -> None:
@@ -34,7 +34,7 @@ class SkipLayerNorm(torch.nn.Module):
 
 
     def forward(self, X: torch.Tensor, SkipIn: torch.Tensor):
-        return PMX.skip_layer_norm(X, self.weight, self.bias, SkipIn, -1, self.eps)
+        return OPMX.skip_layer_norm(X, self.weight, self.bias, SkipIn, -1, self.eps)
 
 
 
@@ -97,25 +97,25 @@ class Attention(nn.Module):
         if self.fused_qkv:
             xqkv = self.wqkv(x)
             # TensorDumper.dump(xqkv, "layer{}_xqkv".format(self.layer_id))
-            xqkv = PMX.reshape(xqkv, expanded_shape)    # (seqlen, 3 * num_head, head_dim)
+            xqkv = OPMX.reshape(xqkv, expanded_shape)    # (seqlen, 3 * num_head, head_dim)
             split_size = (self.num_local_heads, self.num_local_kv_heads, self.num_local_kv_heads)
             xq, xk, xv = torch.split(xqkv, split_size, -2)  # (seqlen, )
         else:
             xq, xk, xv = self.wq(x), self.wk(x), self.wv(x) # (seqlen, hidden_dim)
-            xq = PMX.reshape(xq, expanded_shape)    # (seqstarts[batch], num\\_heads, head\\_dim)
-            xk = PMX.reshape(xk, expanded_shape)
-            xv = PMX.reshape(xv, expanded_shape)
+            xq = OPMX.reshape(xq, expanded_shape)    # (seqstarts[batch], num\\_heads, head\\_dim)
+            xk = OPMX.reshape(xk, expanded_shape)
+            xv = OPMX.reshape(xv, expanded_shape)
         # TensorDumper.dump(xq, "layer{}_reshaped_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
         
-        xq, xk = PMX.dynamic_batching.rotary_2d_position_embedding(xq, xk, seqstarts, start_pos, max_seqlen, first_seqlen) # (seqstarts[batch], num\\_heads, head\\_dim)
+        xq, xk = OPMX.dynamic_batching.rotary_2d_position_embedding(xq, xk, seqstarts, start_pos, max_seqlen, first_seqlen) # (seqstarts[batch], num\\_heads, head\\_dim)
         # TensorDumper.dump(xq, "layer{}_rotary_position_embedding_out_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_rotary_position_embedding_out_xk".format(self.layer_id))
 
         if self.fused_kvcache:
-            attn = PMX.dynamic_batching.multi_head_cache_attention(
+            attn = OPMX.dynamic_batching.multi_head_cache_attention(
                 xq, xk, xv, seqstarts, kvstarts,
                 cachestarts, start_pos,
                 decoding_batches,
@@ -133,7 +133,7 @@ class Attention(nn.Module):
                 cache_mode=self.cache_mode,
                 cache_layout=self.cache_layout)
         else:
-            keys, values = PMX.dynamic_batching.key_value_cache(
+            keys, values = OPMX.dynamic_batching.key_value_cache(
                                             xk, xv, seqstarts, kvstarts,
                                             cachestarts, start_pos,
                                             max_seqlen, max_kvlen,
@@ -148,7 +148,7 @@ class Attention(nn.Module):
 
             # TensorDumper.dump(keys, "layer{}_key_value_cache_out_keys".format(self.layer_id))
             # TensorDumper.dump(values, "layer{}_key_value_cache_out_values".format(self.layer_id))
-            attn = PMX.dynamic_batching.multi_head_attention(
+            attn = OPMX.dynamic_batching.multi_head_attention(
                                             xq, keys, values,
                                             seqstarts, kvstarts,
                                             decoding_batches,
@@ -160,7 +160,7 @@ class Attention(nn.Module):
                                             num_kv_heads=0 if self.friendly_gqa else self.num_local_kv_heads)
         # TensorDumper.dump(attn, "layer{}_multi_head_attention_out".format(self.layer_id))
 
-        output = self.wo(PMX.reshape(attn, (0, -1)))
+        output = self.wo(OPMX.reshape(attn, (0, -1)))
         # TensorDumper.dump(output, "layer{}_reshaped_wo_out".format(self.layer_id))
 
         return output
@@ -188,7 +188,7 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         x1 = self.w1(x)
-        x1 = PMX.gelu(x1, approximate=True)
+        x1 = OPMX.gelu(x1, approximate=True)
         # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
         output = self.w2(x1)
         # TensorDumper.dump(output, "layer{}_ffn_w2".format(self.layer_id))

@@ -16,10 +16,10 @@ def main(
     params = Params.load(Path(ckpt_dir) / "params.json")
     params.vocab_size = tokenizer.vocab_size()
 
-    pmx_params = Params.cvt_model_args(params)
+    opmx_params = Params.cvt_model_args(params)
 
-    with open(Path(ckpt_dir) / "pmx_params.json", "w") as f:
-        json.dump(pmx_params.__dict__, f)
+    with open(Path(ckpt_dir) / "opmx_params.json", "w") as f:
+        json.dump(opmx_params.__dict__, f)
 
 
 if __name__ == "__main__":

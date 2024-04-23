@@ -10,13 +10,13 @@ class RowParallelLinear(torch.autograd.Function):
         g, X: torch.Value, W: torch.Value, B: torch.Value, proc_group: torch.Value,
         in_features: int, out_features: int, input_is_parallel: bool = False):
         if B is not None:
-            Y = g.op("pmx::RowParallelLinear", X, W, B,
+            Y = g.op("opmx::RowParallelLinear", X, W, B,
                     in_features_i = in_features,
                     out_features_i = out_features,
                     bias_term_i = True,
                     input_is_parallel_i = input_is_parallel)
         else:
-            Y = g.op("pmx::RowParallelLinear", X, W,
+            Y = g.op("opmx::RowParallelLinear", X, W,
                     in_features_i = in_features,
                     out_features_i = out_features,
                     bias_term_i = False,

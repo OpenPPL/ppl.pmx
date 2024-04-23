@@ -55,31 +55,32 @@ def write_pmx_model(model_path, input_base_path):
     os.makedirs(model_path, exist_ok=True)
     print ("Loading the checkpoint in a HF model")
 
-    # convert pmx params
+    # convert opmx params
     pmx_params_dict = {}
     params = read_json((os.path.join(input_base_path, "config.json")))
-    pmx_params_dict['hidden_dim'] = params['hidden_size']
-    pmx_params_dict['num_heads'] = params['num_attention_heads']
-    pmx_params_dict['num_layers'] = params['num_hidden_layers']
-    pmx_params_dict['norm_eps'] = params['rms_norm_eps']
+    pmx_params_dict['hidden_dim'] = params['n_embd']
+    pmx_params_dict['num_heads'] = params['n_head']
+    pmx_params_dict['num_layers'] = params['n_layer']
+    pmx_params_dict['norm_eps'] = params['layer_norm_epsilon']
     pmx_params_dict['vocab_size'] = params['vocab_size']
-    pmx_params_dict['num_kv_heads'] = params.get('num_key_value_heads', params['num_attention_heads'])
+    pmx_params_dict['num_kv_heads'] = 1 if params['multi_query'] else params['n_head']
+    pmx_params_dict['max_position_embeddings'] = params['n_positions']
 
     # compute intermediate_size
     hidden_dim = pmx_params_dict['hidden_dim']
     multiple_of = params.get("multiple_of", 256)
     ffn_dim_multiplier = params.get("ffn_dim_multiplier", 1)
-    if "intermediate_size" in params.keys():
-        pmx_params_dict['intermediate_dim'] = params.get("intermediate_size")
+    if "n_inner" in params.keys():
+        pmx_params_dict['intermediate_dim'] = params.get("n_inner")
     else:
         pmx_params_dict['intermediate_dim'] = compute_intermediate_size(hidden_dim, ffn_dim_multiplier, multiple_of)
-    write_json(pmx_params_dict, os.path.join(model_path, "pmx_params.json"))
+    write_json(pmx_params_dict, os.path.join(model_path, "opmx_params.json"))
 
     # TO DO: GQA / MQA, only test on llama
     num_heads = pmx_params_dict['num_heads']
-    # num_kv_heads = pmx_params_dict['num_kv_heads']
-    # key_value_dim = pmx_params_dict['hidden_dim']
-    # dims_per_head = hidden_dim // num_heads
+    num_kv_heads = pmx_params_dict['num_kv_heads']
+    dims_per_head = hidden_dim // num_heads
+    key_value_dim = dims_per_head * num_kv_heads
 
     # load weights
     def unpermute(w, n_heads=num_heads, dim1=hidden_dim, dim2=hidden_dim):
@@ -90,23 +91,38 @@ def write_pmx_model(model_path, input_base_path):
         hf_model_state_dict.update(torch.load(ckpt_path, map_location="cpu"))
 
     for layer_i in range(pmx_params_dict['num_layers']):
-        wq, wk, wv = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.W_pack.weight"].split([hidden_dim]*3, dim=0)
+        split_dim = [head * dims_per_head for head in [num_heads, num_kv_heads, num_kv_heads]]
+        wq, wk, wv = hf_model_state_dict[f"transformer.h.{layer_i}.attn.c_attn.weight"].split(split_dim, dim=0)
+        wq_bias, wk_bias, wv_bias = hf_model_state_dict[f"transformer.h.{layer_i}.attn.c_attn.bias"].split(split_dim, dim=0)
 
         state_dict.update({
-            f"layers.{layer_i}.attention.wq.weight": unpermute(wq),
-            f"layers.{layer_i}.attention.wk.weight": unpermute(wk),
+            f"layers.{layer_i}.attention.wq.weight": wq,
+            f"layers.{layer_i}.attention.wq.bias": wq_bias,
+            f"layers.{layer_i}.attention.wk.weight": wk,
+            f"layers.{layer_i}.attention.wk.bias": wk_bias,
             f"layers.{layer_i}.attention.wv.weight": wv,
-            f"layers.{layer_i}.attention.wo.weight": hf_model_state_dict[f"model.layers.{layer_i}.self_attn.o_proj.weight"],
-            f"layers.{layer_i}.feed_forward.w1.weight": hf_model_state_dict[f"model.layers.{layer_i}.mlp.gate_proj.weight"],
-            f"layers.{layer_i}.feed_forward.w2.weight": hf_model_state_dict[f"model.layers.{layer_i}.mlp.down_proj.weight"],
-            f"layers.{layer_i}.feed_forward.w3.weight": hf_model_state_dict[f"model.layers.{layer_i}.mlp.up_proj.weight"],
-            f"layers.{layer_i}.attention_norm.weight": hf_model_state_dict[f"model.layers.{layer_i}.input_layernorm.weight"],
-            f"layers.{layer_i}.ffn_norm.weight": hf_model_state_dict[f"model.layers.{layer_i}.post_attention_layernorm.weight"],
+            f"layers.{layer_i}.attention.wv.bias": wv_bias,
+            f"layers.{layer_i}.attention.wo.weight": hf_model_state_dict[f'transformer.h.{layer_i}.attn.c_proj.weight'],
+            f"layers.{layer_i}.attention.wo.bias": hf_model_state_dict[f'transformer.h.{layer_i}.attn.c_proj.bias'],
+
+            f"layers.{layer_i}.feed_forward.w1.weight": hf_model_state_dict[f"transformer.h.{layer_i}.mlp.c_fc.weight"],
+            f"layers.{layer_i}.feed_forward.w1.bias": hf_model_state_dict[f"transformer.h.{layer_i}.mlp.c_fc.bias"],
+
+            f"layers.{layer_i}.feed_forward.w2.weight": hf_model_state_dict[f"transformer.h.{layer_i}.mlp.c_proj.weight"],
+            f"layers.{layer_i}.feed_forward.w2.bias": hf_model_state_dict[f"transformer.h.{layer_i}.mlp.c_proj.bias"],
+
+            f"layers.{layer_i}.attention_norm.weight": hf_model_state_dict[f"transformer.h.{layer_i}.ln_1.weight"],
+            f"layers.{layer_i}.attention_norm.bias": hf_model_state_dict[f"transformer.h.{layer_i}.ln_1.bias"],
+
+            f"layers.{layer_i}.ffn_norm.weight": hf_model_state_dict[f"transformer.h.{layer_i}.ln_2.weight"],
+            f"layers.{layer_i}.ffn_norm.bias": hf_model_state_dict[f"transformer.h.{layer_i}.ln_2.bias"],
         })
 
     state_dict.update({
-        "tok_embeddings.weight": hf_model_state_dict["model.embed_tokens.weight"],
-        "norm.weight": hf_model_state_dict["model.norm.weight"],
+        "tok_embeddings.weight": hf_model_state_dict["transformer.wte.weight"],
+        "pos_embeddings.weight": hf_model_state_dict["transformer.wpe.weight"],
+        "norm.weight": hf_model_state_dict["transformer.ln_f.weight"],
+        "norm.bias": hf_model_state_dict["transformer.ln_f.bias"],
         "output.weight": hf_model_state_dict["lm_head.weight"]
     })
     torch.save(state_dict, os.path.join(model_path, "model.pth"))
@@ -120,7 +136,7 @@ def main():
     )
     parser.add_argument(
         "--output_dir",
-        help="Location to write PMX model",
+        help="Location to write OPMX model",
     )
     args = parser.parse_args()
     write_pmx_model(

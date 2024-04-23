@@ -51,7 +51,7 @@ def write_pmx_model(model_path, input_base_path):
     os.makedirs(model_path, exist_ok=True)
     print("Loading the checkpoint in a HF model")
 
-    # convert pmx params
+    # convert opmx params
     pmx_params_dict = {}
     params = read_json((os.path.join(input_base_path, "config.json")))
     pmx_params_dict['hidden_dim'] = params['hidden_size']
@@ -62,7 +62,7 @@ def write_pmx_model(model_path, input_base_path):
     pmx_params_dict['num_kv_heads'] = params['multi_query_group_num']
     pmx_params_dict['intermediate_dim'] = params["ffn_hidden_size"]
     
-    write_json(pmx_params_dict, os.path.join(model_path, "pmx_params.json"))
+    write_json(pmx_params_dict, os.path.join(model_path, "opmx_params.json"))
     print(pmx_params_dict)
     
     hidden_dim = pmx_params_dict['hidden_dim']
@@ -156,7 +156,7 @@ def main():
     )
     parser.add_argument(
         "--output_dir",
-        help="Location to write PMX model",
+        help="Location to write OPMX model",
     )
     args = parser.parse_args()
     write_pmx_model(

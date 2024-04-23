@@ -6,7 +6,7 @@ class PositionIndex(torch.autograd.Function):
     def symbolic(g, sequences: torch.Value,
                 seqstarts: torch.Value, start_pos: torch.Value,
                 max_seqlen: torch.Value):
-        position_idx = g.op("pmx.dynamic_batching::PositionIndex",
+        position_idx = g.op("opmx.dynamic_batching::PositionIndex",
                     sequences, seqstarts,
                     start_pos, max_seqlen)
         return position_idx.setTypeAs(sequences)

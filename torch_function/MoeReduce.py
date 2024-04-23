@@ -7,7 +7,7 @@ class MoeReduce(torch.autograd.Function):
         g: torch._C.Graph, Y: torch.Value, expert_weights: torch.Value, 
         invert_permutation: torch.Value, num_experts_per_token: int):
 
-        Y_out = g.op("pmx::MoeReduce", Y, expert_weights, invert_permutation,
+        Y_out = g.op("opmx::MoeReduce", Y, expert_weights, invert_permutation,
                      num_experts_per_token_i=num_experts_per_token)
         return Y_out.setTypeAs(Y)
 

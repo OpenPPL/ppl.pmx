@@ -8,7 +8,7 @@ import torch.distributed as dist
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/..")
 
-import torch_function as PMX
+import torch_function as OPMX
 
 def setup(use_cpu: bool = True) -> Tuple[int, int]:
     local_rank = int(os.environ.get("LOCAL_RANK", -1))
@@ -51,7 +51,7 @@ class ParallelEmbedding(torch.nn.Module):
         self.weight = nn.Parameter(torch.ones(self.num_embeddings, self.embedding_dim_per_partition))
 
     def forward(self, ids: torch.Tensor) -> torch.Tensor:
-            return PMX.parallel_embedding(
+            return OPMX.parallel_embedding(
                 ids, self.weight, self.proc_group,
                 self.num_embeddings, self.embedding_dim,
                 self.padding_idx, self.max_norm,
@@ -86,7 +86,7 @@ class ColumnParallelLinear(torch.nn.Module):
 
 
         def forward(self, X: torch.Tensor):
-            return PMX.column_parallel_linear(
+            return OPMX.column_parallel_linear(
                 X, self.weight, self.bias, self.proc_group,
                 self.in_features, self.out_features, self.gather_output)
 
@@ -119,7 +119,7 @@ class RowParallelLinear(torch.nn.Module):
 
 
         def forward(self, X: torch.Tensor):
-            return PMX.row_parallel_linear(
+            return OPMX.row_parallel_linear(
                 X, self.weight, self.bias, self.proc_group,
                 self.in_features, self.out_features, self.input_is_parallel)
 
@@ -152,7 +152,7 @@ class MoeColumnParallelLinear(torch.nn.Module):
             self.register_parameter("bias", None)
             
     def forward(self, X: torch.Tensor, expert_offset: torch.Tensor):
-        return PMX.moe_column_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.gather_output)
+        return OPMX.moe_column_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.gather_output)
     
 class MoeRowParallelLinear(torch.nn.Module):
     def __init__(
@@ -183,4 +183,4 @@ class MoeRowParallelLinear(torch.nn.Module):
             self.register_parameter("bias", None)
             
     def forward(self, X: torch.Tensor, expert_offset: torch.Tensor):
-        return PMX.moe_row_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.input_is_parallel)
+        return OPMX.moe_row_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.input_is_parallel)

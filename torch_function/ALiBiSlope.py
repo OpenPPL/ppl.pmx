@@ -5,7 +5,7 @@ import math
 class ALiBiSlope(torch.autograd.Function):
     @staticmethod
     def symbolic(g, num_heads: int):
-        slopes = g.op('pmx::ALiBiSlope',
+        slopes = g.op('opmx::ALiBiSlope',
                         num_heads_i = num_heads)
         return slopes
 

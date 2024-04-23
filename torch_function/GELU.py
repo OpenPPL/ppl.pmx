@@ -5,9 +5,9 @@ class GELU(torch.autograd.Function):
     @staticmethod
     def symbolic(g, X: torch.Value, gate: torch.Value = None, approximate: bool = False):
         if gate is not None:
-            Y = g.op("pmx::GELU", X, gate, approximate_i = approximate)
+            Y = g.op("opmx::GELU", X, gate, approximate_i = approximate)
         else:
-            Y = g.op("pmx::GELU", X, approximate_i = approximate)
+            Y = g.op("opmx::GELU", X, approximate_i = approximate)
         return Y.setTypeAs(X)
 
 

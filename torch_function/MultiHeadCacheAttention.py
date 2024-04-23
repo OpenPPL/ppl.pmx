@@ -20,7 +20,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                  quant_bit: int = 0, quant_group: int = 8, cache_layout: int = 0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if attn_mask is not None:
-            output = g.op('pmx::MultiHeadCacheAttention',
+            output = g.op('opmx::MultiHeadCacheAttention',
                 query, current_key, current_value,
                 start_pos, cache, scale, attn_mask,
                 num_heads_i=num_heads,
@@ -34,7 +34,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 quant_group_i=quant_group,
                 cache_layout_i=cache_layout)
         elif scale is not None:
-            output = g.op('pmx.dynamic_batching::MultiHeadCacheAttention',
+            output = g.op('opmx.dynamic_batching::MultiHeadCacheAttention',
                 query, current_key, current_value,
                 start_pos, cache, scale,
                 num_heads_i=num_heads,
@@ -48,7 +48,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 quant_group_i=quant_group,
                 cache_layout_i=cache_layout)
         else:
-            output = g.op('pmx.dynamic_batching::MultiHeadCacheAttention',
+            output = g.op('opmx.dynamic_batching::MultiHeadCacheAttention',
                 query, current_key, current_value,
                 start_pos, cache,
                 num_heads_i=num_heads,

@@ -7,7 +7,7 @@ class InsertEmbedding(torch.autograd.Function):
                 seqstarts: torch.Value, outstarts: torch.Value,
                 patstarts: torch.Value, offset: torch.Value,
                 max_outlen: torch.Value):
-        return g.op("pmx.dynamic_batching::InsertEmbedding",
+        return g.op("opmx.dynamic_batching::InsertEmbedding",
                     X, P, seqstarts,
                     outstarts, patstarts,
                     offset, max_outlen)

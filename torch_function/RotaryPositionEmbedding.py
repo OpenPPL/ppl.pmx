@@ -10,7 +10,7 @@ class RotaryPositionEmbedding(torch.autograd.Function):
                 scaling_type: str = '', scaling_factor: float = 1.0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if pad_len is not None:
-            rotated_query, rotated_key = g.op('pmx::RotaryPositionEmbedding',
+            rotated_query, rotated_key = g.op('opmx::RotaryPositionEmbedding',
                 query, key, start_pos, pad_len,
                 rotary_dim_i=rotary_dim,
                 theta_f=theta,
@@ -20,7 +20,7 @@ class RotaryPositionEmbedding(torch.autograd.Function):
                 scaling_factor_f=scaling_factor,
                 outputs=2)
         else:
-            rotated_query, rotated_key = g.op('pmx::RotaryPositionEmbedding',
+            rotated_query, rotated_key = g.op('opmx::RotaryPositionEmbedding',
                 query, key, start_pos,
                 rotary_dim_i=rotary_dim,
                 theta_f=theta,

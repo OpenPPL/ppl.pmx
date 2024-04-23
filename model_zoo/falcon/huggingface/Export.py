@@ -23,7 +23,7 @@ def main(
     cache_mode: int = 0, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
     dynamic_batching: bool = False, # use dynamic batching scheduling
 ):
-    with open(Path(ckpt_dir) / "pmx_params.json", "r") as f:
+    with open(Path(ckpt_dir) / "opmx_params.json", "r") as f:
         params = json.loads(f.read())
     params: ModelParams = ModelParams(**params)
 

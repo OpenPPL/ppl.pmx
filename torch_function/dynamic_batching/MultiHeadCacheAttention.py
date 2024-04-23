@@ -28,7 +28,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                  page_size: int = 128):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if attn_mask is not None:
-            output = g.op('pmx.dynamic_batching::MultiHeadCacheAttention',
+            output = g.op('opmx.dynamic_batching::MultiHeadCacheAttention',
                 query, current_key, current_value,
                 seqstarts, kvstarts, cachestarts,
                 start_pos, decoding_batches,
@@ -47,7 +47,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 cache_layout_i=cache_layout,
                 page_size_i=page_size)
         elif scale is not None:
-            output = g.op('pmx.dynamic_batching::MultiHeadCacheAttention',
+            output = g.op('opmx.dynamic_batching::MultiHeadCacheAttention',
                 query, current_key, current_value,
                 seqstarts, kvstarts, cachestarts,
                 start_pos, decoding_batches,
@@ -66,7 +66,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 cache_layout_i=cache_layout,
                 page_size_i=page_size)
         else:
-            output = g.op('pmx.dynamic_batching::MultiHeadCacheAttention',
+            output = g.op('opmx.dynamic_batching::MultiHeadCacheAttention',
                 query, current_key, current_value,
                 seqstarts, kvstarts, cachestarts,
                 start_pos, decoding_batches,
@@ -312,6 +312,8 @@ if __name__ == "__main__":
                     max_seqlen, max_kvlen, _cache, _scale, _attn_mask)
 
                 # dump_tensor(output, f"output_qb{quant_bit}_qg{quant_group}_cm{cache_mode}_cl{cache_layout}_step{step}")
+                # dump_tensor(_cache, f"cache_output_qb{quant_bit}_qg{quant_group}_cm{cache_mode}_cl{cache_layout}_step{step}")
+                # dump_tensor(_scale, f"scale_output_qb{quant_bit}_qg{quant_group}_cm{cache_mode}_cl{cache_layout}_step{step}")
 
                 model_str = torch.onnx.export_to_pretty_string(
                     attnetion,

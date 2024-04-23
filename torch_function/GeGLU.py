@@ -4,7 +4,7 @@ import torch
 class GeGLU(torch.autograd.Function):
     @staticmethod
     def symbolic(g, X: torch.Value, approximate: bool = False):
-        Y = g.op("pmx::GeGLU", X, approximate_i = approximate)
+        Y = g.op("opmx::GeGLU", X, approximate_i = approximate)
         return Y
 
 

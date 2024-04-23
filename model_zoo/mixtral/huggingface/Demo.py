@@ -38,7 +38,7 @@ def main(
 
     tokenizer = Tokenizer(model_path=tokenizer_path)
 
-    with open(Path(ckpt_dir) / "pmx_params.json", "r") as f:
+    with open(Path(ckpt_dir) / "opmx_params.json", "r") as f:
         params = json.loads(f.read())
     params: ModelParams = ModelParams(**params)
 

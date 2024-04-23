@@ -10,7 +10,7 @@ class KeyValueCache(torch.autograd.Function):
         num_layer: int = 1, layer_idx: int = 0, quant_bit: int = 0,
         quant_group: int = 8, num_repeat: int = 1, cache_layout: int = 0):
         if scale is not None:
-            key, value = g.op("pmx::KeyValueCache",
+            key, value = g.op("opmx::KeyValueCache",
                     current_key, current_value,
                     start_pos, cache, scale,
                     num_layer_i = num_layer,
@@ -21,7 +21,7 @@ class KeyValueCache(torch.autograd.Function):
                     cache_layout_i = cache_layout,
                     outputs = 2)
         else:
-            key, value = g.op("pmx::KeyValueCache",
+            key, value = g.op("opmx::KeyValueCache",
                     current_key, current_value,
                     start_pos, cache,
                     num_layer_i = num_layer,
