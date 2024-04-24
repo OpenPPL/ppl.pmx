@@ -29,7 +29,6 @@ from .RMSNorm import rms_norm
 from .RMSNorm import skip_rms_norm
 
 from .RotaryPositionEmbedding import rotary_position_embedding
-from .Rotary2DPositionEmbedding import rotary_2d_position_embedding
 from .VisionEmbedding import vision_embedding
 
 from .RowParallelLinear import row_parallel_linear
