@@ -4,9 +4,10 @@ Open PPL Model Exchange (OPMX) is an open ecosystem that empowers AI developers 
 
 Currently OPMX focus on the capabilities and hardware friendliness needed for Large Language Model(LLM) inferencing.
 
-```diff
-- Notice: PMX has change to OPMX at 2024/05. And the domain of operators are also change to `opmx`(refers to docs/OperatorsTOC.md).
-```
+# Important Notice
+- PMX has change to OPMX at 25/04/2024. 
+- And the domain of operators are also change to `opmx`(refers to [TOC](docs/OperatorsTOC.md)).
+- You can find the old code at [llm_v1](https://github.com/openppl-public/ppl.pmx/tree/llm_v1)
 
 # Operator spec
 
