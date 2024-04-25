@@ -2,14 +2,14 @@
 
 ## Download model from Hugging Face
 
-Download the model file from the [Hugging Face](https://huggingface.co/baichuan-inc/Baichuan-7B).
+Download the model file from the [Hugging Face](https://huggingface.co/baichuan-inc/Baichuan-13B-Base).
 
 ## Convert model params
 
 Due to the inconsistency with the implementation of Hugging Face's RotaryPositionEmbedding function, we need to convert the weight parameters.
 
 ```
-python ConvertBaichuan7BToPmx.py --input_dir <hf_model_dir> --output_dir <pmx_model_dir>
+python ConvertWeightToOpmx.py --input_dir <hf_model_dir> --output_dir <pmx_model_dir>
 ```
 
 you can find opmx model file in`<pmx_model_dir>` after the conversion.
