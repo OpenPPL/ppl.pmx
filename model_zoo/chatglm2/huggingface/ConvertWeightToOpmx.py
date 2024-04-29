@@ -61,6 +61,8 @@ def write_pmx_model(model_path, input_base_path):
     pmx_params_dict['vocab_size'] = params['padded_vocab_size']
     pmx_params_dict['num_kv_heads'] = params['multi_query_group_num']
     pmx_params_dict['intermediate_dim'] = params["ffn_hidden_size"]
+    rope_ratio = params.get('rope_ratio', 1.0)
+    pmx_params_dict['rope_theta'] = 10000.0 * rope_ratio
     
     write_json(pmx_params_dict, os.path.join(model_path, "opmx_params.json"))
     print(pmx_params_dict)
