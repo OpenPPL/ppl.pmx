@@ -23,7 +23,7 @@ pip install -r requirements.txt
 We recommand converting facebook's `params.json` to opmx's `params.json` before running or exporting the model. Because it is needed by the model merging and spliting tools.
 
 ```bash
-ConvertParamsToPmx.py -ckpt_dir <llama_dir> --tokenizer_path <llama_tokenizer_dir>/tokenizer.model
+python ConvertParamsToOpmx.py -ckpt_dir <llama_dir> --tokenizer_path <llama_tokenizer_dir>/tokenizer.model
 ```
 
 You can find `opmx_params.json` in `<llama_dir>` after the conversion.
