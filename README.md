@@ -60,7 +60,7 @@ Currently models:
     - [Exporting Huggingfaces's Mixtral](model_zoo/mixtral/huggingface)
 - [Qwen 1/1.5](model_zoo/qwen)
     - [Exporting Huggingfaces's Qwen](model_zoo/qwen/huggingface)
-- [Falcom](model_zoo/falcon)
+- [Falcon](model_zoo/falcon)
     - [Exporting Huggingfaces's Falcon](model_zoo/falcon/huggingface)
 - [Bigcode](model_zoo/bigcode)
     - [Exporting Huggingfaces's Bigcode](model_zoo/bigcode/huggingface)
