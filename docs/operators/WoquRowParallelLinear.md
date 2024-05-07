@@ -90,7 +90,7 @@ Shape: Different shape for each `quant_axis`, and `per_group`. Let's use some co
 - `per_channel` and `quant_axis==1`: $(N)$.
 - `per_tensor` : $(1)$ or scalar.
 - `per_group` and `quant_axis==0`: $(N/group\\_size,K)$. $N$ must be aligned with `group_size`.
-- `per_group` and `quant_axis==1`: $(N,K/group\\ _size)$ or $(N,K_{d}/group\\_size)$ for each device $d$ when $TPsize > 1$. $K$ or $K_d$ must be aligned with `group_size`.
+- `per_group` and `quant_axis==1`: $(N,K/group\\_ size)$ or $(N,K_{d}/group\\_size)$ for each device $d$ when $TPsize > 1$. $K$ or $K_d$ must be aligned with `group_size`.
 
 ### `ZeroPoint`(constant, optional): tensor(T3)
 
