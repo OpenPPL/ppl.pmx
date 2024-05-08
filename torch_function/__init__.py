@@ -38,6 +38,6 @@ from .SwiGLU import swiglu
 from .Swish import swish
 
 from .GroupNorm import group_norm
-from .Pad import padding
+from .Pad import pad
 
 from . import dynamic_batching
