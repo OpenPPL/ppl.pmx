@@ -7,21 +7,24 @@ The padding size by which to pad some dimensions of input are described starting
 See torch.nn.CircularPad2d, torch.nn.ConstantPad2d, torch.nn.ReflectionPad2d, and torch.nn.ReplicationPad2d for concrete examples on how each of the padding modes works. 
 
 
+## Attributes/Parameters
+
+### `mode`: str
+
+'constant', 'reflect', 'replicate' or 'circular'. Default: 'constant'
+
 ## Inputs
 
 ### `input`: tensor(T)
 
 N-dimensional tensor
 
-### `pad`: tensor(int64)
+### `padding`: tensor(int64)
 
 m-elements tensor
 
-### `mode`: str
 
-'constant', 'reflect', 'replicate' or 'circular'. Default: 'constant'
-
-### `value`: tensor(T)
+### `value`:  float
 
 fill value for 'constant' padding. Default: 0
 
