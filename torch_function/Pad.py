@@ -20,8 +20,12 @@ class Pad(torch.autograd.Function):
 
 
 def pad(input: torch.Tensor, padding: torch.Tensor,
-        value: torch.Tensor, mode: str='constant') -> torch.Tensor:
-    return Pad.apply(input, padding, value, mode)
+        value: torch.Tensor = None, mode: str='constant') -> torch.Tensor:
+    if value is None:
+        _value = torch.tensor(0)
+    else:
+        _value = value
+    return Pad.apply(input, padding, _value, mode)
 
 
 if __name__ == "__main__":
