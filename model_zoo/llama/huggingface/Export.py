@@ -23,12 +23,18 @@ def main(
     cache_layout: int = 0, # change kv cache layout for hardware performance friendly
     cache_mode: int = 0, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
     dynamic_batching: bool = True, # use dynamic batching scheduling
+    empty_weight: bool = False, # export without weight input, just gen random weight
 ):
     with open(Path(ckpt_dir) / "opmx_params.json", "r") as f:
         params = json.loads(f.read())
     params: ModelParams = ModelParams(**params)
 
-    generator = Loader.load(
+    if empty_weight:
+        load_method = Loader.random
+    else:
+        load_method = Loader.load
+
+    generator = load_method(
         ckpt_dir, params,
         friendly_gqa=friendly_gqa,
         fused_qkv=fused_qkv,
