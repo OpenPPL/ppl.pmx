@@ -70,7 +70,7 @@ class LLaMA(__TextGenerator__):
             kv_scale = torch.zeros(cache_shape_prefix + (scale_head_dim,), dtype=torch.float16).cuda()
         else:
             kv_cache = torch.zeros(cache_shape_prefix + (head_dim,), dtype=torch.float16).cuda()
-            kv_scale = None
+            kv_scale = torch.empty(0)
 
         tokens_ids = torch.full((bsz, total_len), pad_id).cuda().long()
         for k, t in enumerate(prompts_ids):
@@ -143,7 +143,7 @@ class LLaMA(__TextGenerator__):
             kv_scale = torch.zeros(cache_shape_prefix + (scale_head_dim,), dtype=torch.float16)
         else:
             kv_cache = torch.zeros(cache_shape_prefix + (head_dim,), dtype=torch.float16)
-            kv_scale = None
+            kv_scale = torch.empty(0)
 
         start_pos = torch.tensor([0])
         tokens_ids = torch.ones(bsz, total_len // 2).long()
