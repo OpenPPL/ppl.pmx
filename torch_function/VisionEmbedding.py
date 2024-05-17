@@ -27,7 +27,7 @@ class VisionEmbedding(torch.autograd.Function):
             return output
         else:
             num_positions = num_patches + 1
-            position_ids = torch.arange(num_positions).expand((1, -1))
+            position_ids = torch.arange(num_positions).expand((1, -1)).to(position_weight.device)
             batch_size = pixel_values.shape[0]
 
             patch_embeds = F.conv2d(pixel_values, patch_weight, stride=patch_size) # shape -> [batch_size, hidden_dim, grid, grid]
