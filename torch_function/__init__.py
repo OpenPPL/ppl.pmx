@@ -30,6 +30,7 @@ from .RMSNorm import skip_rms_norm
 
 from .RotaryPositionEmbedding import rotary_position_embedding
 from .VisionEmbedding import vision_embedding
+from .BertEmbedding import bert_embedding
 
 from .RowParallelLinear import row_parallel_linear
 
