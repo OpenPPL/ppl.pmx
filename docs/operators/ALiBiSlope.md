@@ -8,7 +8,7 @@ that is proportional to their distance.
 ALiBi is defined as:
 
 $$
-\{softmax}\left(\mathbf{q}_i \mathbf{K}^{\top}+m \cdot[-(i-1), \ldots,-2,-1,0]\right)
+softmax\left(\mathbf{q}_i \mathbf{K}^{\top}+m \cdot[-(i-1), \ldots,-2,-1,0]\right)
 $$
 
 ![ALiBi](ALiBi.jpeg)
