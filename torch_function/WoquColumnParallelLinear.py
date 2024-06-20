@@ -7,9 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from typing import Optional
-sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/..")
 
-from model_zoo.ModelQuantUtils import *
+from ModelQuantUtils import Int4_QuantUtils
 
 
 class WoquColumnParallelLinear(torch.autograd.Function):
@@ -93,8 +92,8 @@ class WoquColumnParallelLinear(torch.autograd.Function):
         else:
             # Matrix multiply.
             assert quant_data_type == 'int4', 'int8 dequantize is not implemented'
-            unpacked_int4_w = unpack(W)
-            dequant_fp16_w = dequantize_int4(unpacked_int4_w, Scale, ZeroPoint, group_size)
+            unpacked_int4_w = Int4_QuantUtils.unpack(W)
+            dequant_fp16_w = Int4_QuantUtils.dequantize_int4_to_fp16(unpacked_int4_w, Scale, ZeroPoint, group_size)
             output_parallel = F.linear(X, dequant_fp16_w, B)
             # All-gather across the partitions.
             if gather_output and proc_group is not None and torch.distributed.get_world_size(proc_group) > 1:
@@ -131,6 +130,7 @@ if __name__ == "__main__":
             quant_method: str = 'weight only',
             quant_axis: int = 1,
             group_size: int = 128,
+            storage_bits: int = 16,
             has_zeropoint: bool=False,
             float_zeropoint: bool=False,
             bias_term: bool = True,
@@ -154,9 +154,9 @@ if __name__ == "__main__":
 
             self.out_features_per_partition = out_features // world_size
 
-            # pack int4 to int32
+            # pack int4 to int16
             if self.quant_data_type == 'int4':
-                self.register_buffer('weight', torch.ones( self.out_features_per_partition, self.in_features // (32 // 4), dtype=torch.int32 ))
+                self.register_buffer('weight', torch.ones( self.out_features_per_partition // (storage_bits // 4), self.in_features, dtype=torch.int16 ))
             elif self.quant_data_type == 'int8' and self.has_zeropoint == False:
                 self.weight = self.register_buffer('weight', torch.ones(self.out_features_per_partition, self.in_features, dtype=torch.int8))
 
@@ -179,7 +179,7 @@ if __name__ == "__main__":
                 self.group_size, self.has_zeropoint, self.float_zeropoint)
 
 
-    test_op1 = TestModule1(None, 512, 2048, has_zeropoint=False)
+    test_op1 = TestModule1(None, 512, 2048, has_zeropoint=True)
 
     input = torch.ones([8, 512], dtype=torch.float16)
     model_str1 = torch.onnx.export_to_pretty_string(
