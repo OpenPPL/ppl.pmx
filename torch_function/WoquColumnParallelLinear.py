@@ -8,19 +8,19 @@ import torch.nn.functional as F
 
 from typing import Optional
 
-from ModelQuantUtils import Int4_QuantUtils
+from WeightOnlyQuantUtils import Int4QuantUtils
 
 
 class WoquColumnParallelLinear(torch.autograd.Function):
     @staticmethod
     def symbolic(
-        g, X: torch.Value, W: torch.Value, B: torch.Value, proc_group: torch.Value,
-        Scale: torch.Value, ZeroPoint: Optional[torch.Value], quant_data_type: str,
+        g, X: torch.Value, W: torch.Value, Scale: torch.Value, ZeroPoint: Optional[torch.Value],
+        B: Optional[torch.Value], proc_group: torch.Value, quant_data_type: str,
         in_features: int, out_features: int, gather_output: bool = True,
         quant_method: str='', quant_axis: int=1, group_size: int=128,
         has_zeropoint: bool=False, float_zeropoint: bool=False):
         if B is not None and ZeroPoint is not None:
-            Y = g.op("opmx::WoquColumnParallelLinear", X, W, B, Scale, ZeroPoint,
+            Y = g.op("opmx::WoquColumnParallelLinear", X, W, Scale, ZeroPoint, B,
                     quant_data_type_s = quant_data_type,
                     in_features_i = in_features,
                     out_features_i = out_features,
@@ -44,7 +44,7 @@ class WoquColumnParallelLinear(torch.autograd.Function):
                     has_zeropoint_i = True,
                     float_zeropoint_i = float_zeropoint)
         elif B is not None and ZeroPoint is None:
-            Y = g.op("opmx::WoquColumnParallelLinear", X, W, B, Scale,
+            Y = g.op("opmx::WoquColumnParallelLinear", X, W, Scale, B,
                      quant_data_type_s = quant_data_type,
                      in_features_i = in_features,
                      out_features_i = out_features,
@@ -72,8 +72,8 @@ class WoquColumnParallelLinear(torch.autograd.Function):
 
     @staticmethod
     def forward(
-        self, X: torch.Tensor, W: torch.Tensor, B: torch.Tensor, proc_group: dist.ProcessGroup,
-        Scale: torch.Value, ZeroPoint: Optional[torch.Value], quant_data_type: str,
+        self, X: torch.Tensor, W: torch.Tensor, Scale: torch.Value, ZeroPoint: Optional[torch.Value],
+        B: Optional[torch.Value], proc_group: dist.ProcessGroup, quant_data_type: str,
         in_features: int, out_features: int, gather_output: bool = True, quant_method: str='',
         quant_axis: int=1, group_size: int=128, has_zeropoint: bool=False, float_zeropoint: bool=False):
 
@@ -92,8 +92,8 @@ class WoquColumnParallelLinear(torch.autograd.Function):
         else:
             # Matrix multiply.
             assert quant_data_type == 'int4', 'int8 dequantize is not implemented'
-            unpacked_int4_w = Int4_QuantUtils.unpack(W)
-            dequant_fp16_w = Int4_QuantUtils.dequantize_int4_to_fp16(unpacked_int4_w, Scale, ZeroPoint, group_size)
+            unpacked_int4_w = Int4QuantUtils.unpack(W)
+            dequant_fp16_w = Int4QuantUtils.dequantize_int4_to_fp16(unpacked_int4_w, Scale, ZeroPoint, group_size)
             output_parallel = F.linear(X, dequant_fp16_w, B)
             # All-gather across the partitions.
             if gather_output and proc_group is not None and torch.distributed.get_world_size(proc_group) > 1:
@@ -110,11 +110,11 @@ class WoquColumnParallelLinear(torch.autograd.Function):
 
 
 def woqu_column_parallel_linear(
-        X: torch.Tensor, W: torch.Tensor, B: torch.Tensor, proc_group: dist.ProcessGroup,
-        Scale: torch.Value, ZeroPoint: Optional[torch.Value], quant_data_type: str,
-        in_features: int, out_features: int, gather_output: bool = True, quant_method: str='',
-        quant_axis: int=1, group_size: int=128, has_zeropoint: bool=False, float_zeropoint: bool=False) -> torch.Tensor:
-    return WoquColumnParallelLinear.apply(X, W, B, proc_group, Scale, ZeroPoint, quant_data_type,
+    X: torch.Tensor, W: torch.Tensor, Scale: torch.Value, ZeroPoint: Optional[torch.Value],
+    B: Optional[torch.Value], proc_group: dist.ProcessGroup, quant_data_type: str, in_features: int,
+    out_features: int, gather_output: bool = True, quant_method: str='', quant_axis: int=1,
+    group_size: int=128, has_zeropoint: bool=False, float_zeropoint: bool=False) -> torch.Tensor:
+    return WoquColumnParallelLinear.apply(X, W, Scale, ZeroPoint, B, proc_group, quant_data_type,
                                       in_features, out_features, gather_output, quant_method,
                                       quant_axis, group_size, has_zeropoint, float_zeropoint)
 
@@ -174,12 +174,12 @@ if __name__ == "__main__":
 
         def forward(self, X: torch.Tensor):
             return woqu_column_parallel_linear(
-                X, self.weight, self.bias, self.proc_group, self.Scale, self.ZeroPoint, self.quant_data_type,
+                X, self.weight, self.Scale, self.ZeroPoint, self.bias, self.proc_group, self.quant_data_type,
                 self.in_features, self.out_features, self.gather_output, self.quant_method, self.quant_axis,
                 self.group_size, self.has_zeropoint, self.float_zeropoint)
 
 
-    test_op1 = TestModule1(None, 512, 2048, has_zeropoint=True)
+    test_op1 = TestModule1(None, 512, 2048, has_zeropoint=False, bias_term=True)
 
     input = torch.ones([8, 512], dtype=torch.float16)
     model_str1 = torch.onnx.export_to_pretty_string(

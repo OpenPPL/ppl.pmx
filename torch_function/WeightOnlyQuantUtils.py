@@ -2,7 +2,7 @@ import torch
 from typing import List
 
 
-def pseudo_quantize_tensor(w, n_bit=4, zero_point=True, group_size=-1):
+def pseudo_quantize_linear_weight(w, n_bit=4, zero_point=True, group_size=-1):
     org_w_shape = w.shape #(out_features, in_features)
     if group_size > 0:
         assert org_w_shape[-1] % group_size == 0
@@ -31,7 +31,7 @@ def pseudo_quantize_tensor(w, n_bit=4, zero_point=True, group_size=-1):
 
     return w, scales, zeros
 
-class Int4_QuantUtils():
+class Int4QuantUtils():
 
     @staticmethod
     def pack(imatrix: torch.Tensor, storage_bits: int=16,
@@ -157,9 +157,9 @@ class Int4_QuantUtils():
 if __name__ == "__main__":
     layer = torch.nn.Linear(in_features=512, out_features=2048, dtype=torch.float16)
     weight = layer.weight #shape -> (output_features, in_features)
-    qdq_w, scale, zp = pseudo_quantize_tensor(weight, n_bit=4, zero_point=False, group_size=128)
-    int4_w = Int4_QuantUtils.quantize_fp16_to_int4(qdq_w, scale, zp, 128)
-    packed_int32_w = Int4_QuantUtils.pack(int4_w)
-    unpacked_int4_w = Int4_QuantUtils.unpack(packed_int32_w)
-    qdq_w_after_pack = Int4_QuantUtils.dequantize_int4_to_fp16(unpacked_int4_w, scale, zp, 128)
+    qdq_w, scale, zp = pseudo_quantize_linear_weight(weight, n_bit=4, zero_point=False, group_size=128)
+    int4_w = Int4QuantUtils.quantize_fp16_to_int4(qdq_w, scale, zp, 128)
+    packed_int32_w = Int4QuantUtils.pack(int4_w)
+    unpacked_int4_w = Int4QuantUtils.unpack(packed_int32_w)
+    qdq_w_after_pack = Int4QuantUtils.dequantize_int4_to_fp16(unpacked_int4_w, scale, zp, 128)
     print ('diff after pack and unpack: \n', qdq_w - qdq_w_after_pack)
