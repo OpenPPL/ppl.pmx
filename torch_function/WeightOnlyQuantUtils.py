@@ -112,7 +112,7 @@ class Int4QuantUtils():
             imatrix (torch.Tensor): matrix of unsigned 4 bit integers
         """
 
-        if zeros is None:
+        if zeros is None or zeros.nelement() == 0:
             offset = 2 ** (n_bits - 1)
         else:
             zeros = zeros.to(torch.int8) & 0x0F
@@ -141,7 +141,7 @@ class Int4QuantUtils():
         Returns:
             fmatrix (torch.Tensor): matrix of 16-bit floats
         """
-        if zeros is None:
+        if zeros is None or zeros.nelement() == 0:
             offset = 2 ** (n_bits - 1)
         else:
             zeros = zeros.to(torch.int8) & 0x0F
