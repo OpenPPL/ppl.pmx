@@ -51,7 +51,7 @@ def write_json(text, path):
         json.dump(text, f)
 
 
-def write_pmx_model(model_path, input_base_path, model_type):
+def write_pmx_model(model_path, input_base_path):
     os.makedirs(model_path, exist_ok=True)
     print ("Loading the checkpoint in a HF model")
 
@@ -81,83 +81,23 @@ def write_pmx_model(model_path, input_base_path, model_type):
     print(pmx_params_dict)
     write_json(pmx_params_dict, os.path.join(model_path, "opmx_params.json"))
 
-    # TO DO: GQA / MQA, only test on llama
-    num_heads = pmx_params_dict['num_heads']
-    num_kv_heads = pmx_params_dict['num_kv_heads']
-    dims_per_head = hidden_dim // num_heads
-    key_value_dim = dims_per_head * num_kv_heads
-
-    # load weights
-    def unpermute(w, n_heads=num_heads, dim1=hidden_dim, dim2=hidden_dim):
-        return w.view(n_heads, 2, dim1 // n_heads // 2, dim2).transpose(1, 2).reshape(dim1, dim2)
-
-    hf_model_state_dict, state_dict = {}, {}
-
-    if model_type is None:
-        if any(Path(input_base_path).glob("*.safetensors")):
-            model_type = "safetensors"
-        else:
-            model_type = "bin"
-
-    if model_type == "bin":
-        for ckpt_path in sorted(Path(input_base_path).glob("*.bin")):
-            hf_model_state_dict.update(torch.load(ckpt_path, map_location="cpu"))
-    elif model_type == "safetensors":
-        from safetensors import safe_open
-        for ckpt_path in sorted(Path(input_base_path).glob("*.safetensors")):
-            weights = safe_open(ckpt_path, 'pt', 'cpu')
-            weights = {k: weights.get_tensor(k) for k in weights.keys()}
-            hf_model_state_dict.update(weights)
-    else:
-        raise ValueError(f"Not support the model_type: {model_type}.")
-
-    for layer_i in range(pmx_params_dict['num_layers']):
-
-        wq = unpermute(hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"])
-        wk = unpermute(hf_model_state_dict[f"model.layers.{layer_i}.self_attn.k_proj.weight"], num_kv_heads, key_value_dim, hidden_dim)
-        wv = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.v_proj.weight"]
-
-        state_dict.update({
-            f"layers.{layer_i}.attention.wq.weight": wq,
-            f"layers.{layer_i}.attention.wk.weight": wk,
-            f"layers.{layer_i}.attention.wv.weight": wv,
-            f"layers.{layer_i}.attention.wo.weight": hf_model_state_dict[f"model.layers.{layer_i}.self_attn.o_proj.weight"],
-            f"layers.{layer_i}.feed_forward.w1.weight": hf_model_state_dict[f"model.layers.{layer_i}.mlp.gate_proj.weight"],
-            f"layers.{layer_i}.feed_forward.w2.weight": hf_model_state_dict[f"model.layers.{layer_i}.mlp.down_proj.weight"],
-            f"layers.{layer_i}.feed_forward.w3.weight": hf_model_state_dict[f"model.layers.{layer_i}.mlp.up_proj.weight"],
-            f"layers.{layer_i}.attention_norm.weight": hf_model_state_dict[f"model.layers.{layer_i}.input_layernorm.weight"],
-            f"layers.{layer_i}.ffn_norm.weight": hf_model_state_dict[f"model.layers.{layer_i}.post_attention_layernorm.weight"],
-        })
-
-    state_dict.update({
-        "tok_embeddings.weight": hf_model_state_dict["model.embed_tokens.weight"],
-        "norm.weight": hf_model_state_dict["model.norm.weight"],
-        "output.weight": hf_model_state_dict["lm_head.weight"]
-    })
-    torch.save(state_dict, os.path.join(model_path, "model.pth"))
-
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--input_dir",
         help="Location of HF weights, which contains tokenizer.model and model folders",
+        required=True
     )
     parser.add_argument(
         "--output_dir",
         help="Location to write OPMX model",
-    )
-    parser.add_argument(
-        "--model_type",
-        choices=["bin", "safetensors"],
-        default=None,
-        help="Input model type",
+        required=True
     )
     args = parser.parse_args()
     write_pmx_model(
         model_path=args.output_dir,
-        input_base_path=args.input_dir,
-        model_type=args.model_type
+        input_base_path=args.input_dir
     )
 
 if __name__ == "__main__":

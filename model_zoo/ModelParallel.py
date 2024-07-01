@@ -123,6 +123,7 @@ class RowParallelLinear(torch.nn.Module):
                 X, self.weight, self.bias, self.proc_group,
                 self.in_features, self.out_features, self.input_is_parallel)
 
+
 class MoeColumnParallelLinear(torch.nn.Module):
     def __init__(
         self,
@@ -152,8 +153,12 @@ class MoeColumnParallelLinear(torch.nn.Module):
             self.register_parameter("bias", None)
             
     def forward(self, X: torch.Tensor, expert_offset: torch.Tensor):
-        return OPMX.moe_column_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.gather_output)
-    
+        return OPMX.moe_column_parallel_linear(
+            X, expert_offset, self.weight, self.bias,
+            self.proc_group, self.num_experts, self.in_features,
+            self.out_features, self.gather_output)
+
+
 class MoeRowParallelLinear(torch.nn.Module):
     def __init__(
         self, 
@@ -183,4 +188,7 @@ class MoeRowParallelLinear(torch.nn.Module):
             self.register_parameter("bias", None)
             
     def forward(self, X: torch.Tensor, expert_offset: torch.Tensor):
-        return OPMX.moe_row_parallel_linear(X, expert_offset, self.weight, self.bias, self.proc_group, self.num_experts, self.in_features, self.out_features, self.input_is_parallel)
+        return OPMX.moe_row_parallel_linear(
+            X, expert_offset, self.weight, self.bias,
+            self.proc_group, self.num_experts,
+            self.in_features, self.out_features, self.input_is_parallel)

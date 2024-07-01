@@ -7,6 +7,28 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/..")
 
 import torch_function as OPMX
 
+class LayerNorm(torch.nn.Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+        self.bias = torch.nn.Parameter(torch.zeros(dim))
+
+    def forward(self, x):
+        return OPMX.layer_norm(x, self.weight, self.bias, -1, self.eps)
+
+
+class SkipLayerNorm(torch.nn.Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+        self.bias = torch.nn.Parameter(torch.zeros(dim))
+
+    def forward(self, x, skip):
+        return OPMX.skip_layer_norm(x, self.weight, self.bias, skip, -1, self.eps)
+
+
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
@@ -42,6 +64,6 @@ class Linear(torch.nn.Module):
             self.bias = nn.Parameter(torch.zeros(self.out_features))
         else:
             self.register_parameter("bias", None)
-    
+
     def forward(self, X: torch.Tensor):
         return OPMX.linear(X, self.weight, self.bias, self.in_features, self.out_features)

@@ -94,7 +94,7 @@ class LLaMA(__TextGenerator__):
             kv_scale = torch.zeros(cache_prefix_shape + (scale_head_dim,), dtype=torch.float16).cuda()
         else:
             kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.float16).cuda()
-            kv_scale = None
+            kv_scale = torch.empty(0)
 
         max_prompt_len = max([len(t) for t in unprocessed_prompt_tokens_ids])
         max_cache_len = round_up_to_page(max_prompt_len + max_gen_len)
@@ -260,7 +260,7 @@ class LLaMA(__TextGenerator__):
             kv_scale = torch.zeros(cache_prefix_shape + (scale_head_dim,), dtype=torch.float16)
         else:
             kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.float16)
-            kv_scale = None
+            kv_scale = torch.empty(0)
 
         seqlen = total_len // 2
         token_ids = torch.ones(bsz * seqlen, dtype=torch.int64)

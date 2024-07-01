@@ -13,28 +13,9 @@ import torch_function as OPMX
 from ModelParams import ModelParams
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding
+from ModelLayers import SkipRMSNorm
 
 TensorDumper = ModelUtils.__TensorDumper__()
-
-class RMSNorm(torch.nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
-
-    def forward(self, x):
-        return OPMX.rms_norm(x, self.weight, -1, self.eps)
-
-
-class SkipRMSNorm(torch.nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
-
-    def forward(self, x, skip):
-        return OPMX.skip_rms_norm(x, self.weight, skip, -1, self.eps)
-
 
 class Attention(nn.Module):
     def __init__(
@@ -419,3 +400,13 @@ class Transformer(nn.Module):
         for key in state_dict:
             if key not in loaded_params:
                 print(f'{key} is not loaded.')
+
+    @torch.no_grad()
+    def random_weight(self):
+        model_params = {key: value for key, value in self.named_parameters()}
+
+        for key, value in model_params.items():
+            module_name, param_name = key.rsplit(".", 1)
+
+            self.get_submodule(module_name)._parameters[param_name] = torch.randn_like(value)
+            print(f'Random: {key} -> {key}[{value.shape}]')

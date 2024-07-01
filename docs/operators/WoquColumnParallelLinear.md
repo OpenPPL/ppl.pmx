@@ -20,13 +20,11 @@ Reserved. Auxiliary attribute for quantization method.
 
 Axis direction of quantization parameters for per group or per tensor quantization. Only accept `0` or `1`. `0` for `out_features` and `1` for `in_features`. 
 
-### `per_group`: bool(default: True)
-
-Use per group quantization when `per_group == True`, otherwise use per channel(per out features) or per tensor quantization(determinate by shape of `Scale`).
-
 ### `group_size`: int(default: 128)
 
 Group size for per group quantization.
+
+Use per group quantization when `group_size != 0`, otherwise use per channel(per out features) or per tensor quantization(determinate by shape of `Scale`).
 
 ### `has_zeropoint`: bool(default: False)
 
@@ -38,13 +36,11 @@ Definition of asymmetry quantization: `quantized = round(X / scale + zeropoint)`
 
 Use floating point zeropoint for untraditional asymmetry quantization.
 
-In this term the usage of zeropoint is different from traditional quantization method.
+In this term the usage of zeropoint is different from traditional quantization method. And zeropoint is more like a bias.
 
 Zeropoint is performed as `zeropoint = (max(X) + min(X)) / 2`.
 
 And `quantized = round((X - zeropoint) / scale)`, `dequantized = scale * quantized + zeropoint`.
-
-Zeropoint is more like a bias.
 
 ### `in_features`: int
 
@@ -76,7 +72,7 @@ Transformation weight.
 
 Shape: Different shape for each `quant_data_type`
 
-- `int8`: for $(N,K)$ or $(N_d,K)$ for each device $d$ when $TPsize > 1$.
+- `int8` or higher bit qunatization: for $(N,K)$ or $(N_d,K)$ for each device $d$ when $TPsize > 1$.
 - `int4`: for $(N/4,K)$ or $(N_{d}/4,K)$ for each device $d$ when $TPsize > 1$. $N$ or $N\\_d$ must be aligned with 4. And weight data is packed as `int4x4`, so the datatype of `W` must be `int16`.
 
 ### `Scale`(constant): tensor(T1)
@@ -85,10 +81,10 @@ Quantization scale.
 
 Shape: Different shape for each `quant_axis`, and `per_group`. Let's use some combinations as examples
 
-- `per_channel` and `quant_axis==1`: $(N)$ or $(N_d)$ for each device $d$ when $TPsize > 1$.
+- `per_channel` and `quant_axis == 1`: $(N)$ or $(N_d)$ for each device $d$ when $TPsize > 1$.
 - `per_tensor` : $(1)$ or scalar.
-- `per_group` and `quant_axis==0`: $(N/group\\_size,K)$ or $(N_{d}/group\\_size,K)$ for each device $d$ when $TPsize > 1$. $N$ or $N\\_d$ must be aligned with `group_size`.
-- `per_group` and `quant_axis==1`: $(N,K/group\\_size)$ or $(N_{d},K/group\\_size)$ for each device $d$ when $TPsize > 1$. $K$ must be aligned with `group_size`.
+- `group_size != 0` and `quant_axis == 0`: $(N/group\\_size,K)$ or $(N_{d}/group\\_size,K)$ for each device $d$ when $TPsize > 1$. $N$ or $N\\_d$ must be aligned with `group_size`.
+- `group_size != 0` and `quant_axis == 1`: $(N,K/group\\_ size)$ or $(N_{d},K/group\\_size)$ for each device $d$ when $TPsize > 1$. $K$ must be aligned with `group_size`.
 
 ### `ZeroPoint`(constant, optional): tensor(T3)
 
