@@ -36,6 +36,12 @@ def main(
     # export model
     input_ids = torch.tensor([[ 101, 3416,  891, 3144, 2945,  118,  122,  102   ],
                               [ 101, 3416,  891, 3144, 2945,  118,  123,  102  ]], dtype=torch.int64)
+
+    input_shape = input_ids.shape
+    seq_length = input_shape[1]
+    token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
+    position_ids = torch.arange(seq_length).expand((1, -1)).to(input_ids.device)
+
     attn_mask = torch.empty(0, dtype=torch.float16)
 
     local_rank = torch.distributed.get_rank(group=model.proc_group)
@@ -46,9 +52,9 @@ def main(
 
     torch.onnx.export(
         model.cpu(),
-        (input_ids, attn_mask),
+        (input_ids, token_type_ids, position_ids, attn_mask),
         os.path.join(model_path, "model.onnx"),
-        input_names=["input_ids", "attn_mask"],
+        input_names=["input_ids", "token_type_ids", "position_ids", "attn_mask"],
         output_names=["bert_logits"],
         do_constant_folding=True,
         opset_version=11,
