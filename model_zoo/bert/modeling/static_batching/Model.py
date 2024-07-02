@@ -13,28 +13,10 @@ import torch_function as OPMX
 
 import bert.modeling.Params as Params
 import ModelUtils
-from ModelParallel import ColumnParallelLinear, RowParallelLinear
+from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding
 from ModelLayers import Linear, LayerNorm, SkipLayerNorm
 
 TensorDumper = ModelUtils.__TensorDumper__()
-
-
-class BertEmbeddings(nn.Module):
-    def __init__(self, hidden_dim: int, vocab_size: int, max_position_embeddings: int,
-                 type_vocab_size: int, position_embedding_type: str='absolute'):
-        super().__init__()
-        self.hidden_dim = hidden_dim
-        self.vocab_size = vocab_size
-        self.max_position_embeddings = max_position_embeddings
-        self.type_vocab_size = type_vocab_size
-        self.position_embedding_type = position_embedding_type
-
-        self.word_weight = nn.Parameter(torch.randn([self.vocab_size, self.hidden_dim]))
-        self.token_type_weight  = nn.Parameter(torch.randn([self.type_vocab_size, self.hidden_dim]))
-        self.position_weight = nn.Parameter(torch.randn([self.max_position_embeddings, self.hidden_dim]))
-
-    def forward(self, input_ids: torch.Tensor, token_type_ids: Optional[torch.LongTensor] = None):
-        return OPMX.bert_embedding(input_ids, self.word_weight, self.token_type_weight, self.position_weight, self.position_embedding_type, token_type_ids)
 
 
 class BertPooler(nn.Module):
@@ -178,8 +160,6 @@ class TransformerBlock(nn.Module):
 
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor, attn_mask: Optional[torch.Tensor]):
-        # TensorDumper.dump(norm, "layer{}_attention_norm_out".format(self.layer_id))
-        # TensorDumper.dump(res1, "layer{}_attention_norm_skip_out".format(self.layer_id))
         attn = self.attention.forward(x, attn_mask)
         attn_norm = self.attention_norm(attn + x)
         ffn = self.feed_forward.forward(attn_norm)
@@ -212,8 +192,10 @@ class BertTransformer(nn.Module):
         self.local_q_dim = num_local_heads * head_dim
         self.local_kv_dim = num_local_kv_heads * head_dim
 
-        self.bert_embeddings = BertEmbeddings(params.hidden_dim, params.vocab_size,
-                                              params.max_position_embeddings, params.type_vocab_size, params.position_embedding_type)
+        self.input_embeddings = ParallelEmbedding(proc_group, params.vocab_size, params.hidden_dim)
+        self.token_type_embeddings = ParallelEmbedding(proc_group, params.type_vocab_size, params.hidden_dim)
+        self.position_embeddings = ParallelEmbedding(proc_group, params.max_position_embeddings, params.hidden_dim)
+
         self.pre_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
         #self.post_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
 
@@ -232,15 +214,17 @@ class BertTransformer(nn.Module):
 
 
     @torch.inference_mode()
-    def forward(self, input_ids: torch.Tensor, attn_mask: Optional[torch.Tensor],
-                token_type_ids: Optional[torch.LongTensor] = None,):
+    def forward(self, input_ids: torch.Tensor, token_type_ids: torch.LongTensor,
+                position_ids: torch.LongTensor, attn_mask: Optional[torch.Tensor]):
         TensorDumper.dump(input_ids, "input_ids")
+        TensorDumper.dump(token_type_ids, "token_type_ids")
+        TensorDumper.dump(position_ids, "position_ids")
+
         if attn_mask is not None:
             TensorDumper.dump(attn_mask, "attn_mask")
-        if token_type_ids is not None:
-            TensorDumper.dump(token_type_ids, "token_type_ids")
 
-        h = self.bert_embeddings(input_ids, token_type_ids)
+        h = self.input_embeddings(input_ids) + self.token_type_embeddings(token_type_ids) + \
+            self.position_embeddings(position_ids)
         # TensorDumper.dump(h, "emb_out")
         h = self.pre_layernorm(h)
         # TensorDumper.dump(h, "pre_layernorm_out")
@@ -249,13 +233,9 @@ class BertTransformer(nn.Module):
         for layer in self.layers:
             h, norm = layer(h, norm, attn_mask)
         output =  h
-        # pooled_output = (norm + h)[:, 0, :] # get cls token
-        # TensorDumper.dump(pooled_output, "pooled_output")
-        # output = self.post_layernorm(pooled_output)
-        # TensorDumper.dump(output, "post_layernorm_out")
+
         if self.with_proj_head:
             output = self.pool_projection(h)
-            # TensorDumper.dump(output, "vision_proj_out")
         TensorDumper.dump(output, "logits")
         return output
 

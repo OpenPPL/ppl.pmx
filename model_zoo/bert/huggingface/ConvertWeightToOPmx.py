@@ -105,15 +105,12 @@ def write_pmx_model(model_path, input_base_path):
         })
 
     state_dict.update({
-        "bert_embeddings.word_weight": hf_model_state_dict['embeddings.word_embeddings.weight'],
-        "bert_embeddings.token_type_weight": hf_model_state_dict['embeddings.token_type_embeddings.weight'],
-        "bert_embeddings.position_weight": hf_model_state_dict['embeddings.position_embeddings.weight'],
+        "input_embeddings.weight": hf_model_state_dict['embeddings.word_embeddings.weight'],
+        "token_type_embeddings.weight": hf_model_state_dict['embeddings.token_type_embeddings.weight'],
+        "position_embeddings.weight": hf_model_state_dict['embeddings.position_embeddings.weight'],
 
-        "pre_layernorm.weight": hf_model_state_dict['embeddings.LayerNorm.weight'], # huggingface misspelling
-        "pre_layernorm.bias": hf_model_state_dict['embeddings.LayerNorm.bias'], # huggingface misspelling
-
-        #"post_layernorm.weight": hf_model_state_dict["vision_model.post_layernorm.weight"],
-        #"post_layernorm.bias": hf_model_state_dict["vision_model.post_layernorm.bias"]
+        "pre_layernorm.weight": hf_model_state_dict['embeddings.LayerNorm.weight'],
+        "pre_layernorm.bias": hf_model_state_dict['embeddings.LayerNorm.bias'],
     })
 
     if "pooler.dense.weight" in hf_model_state_dict.keys():

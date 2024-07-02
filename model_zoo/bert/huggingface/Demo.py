@@ -37,7 +37,13 @@ def main(
     attn_mask = torch.empty(0, dtype=torch.float16).to('cuda')
     input_ids = torch.tensor([[ 101, 3416,  891, 3144, 2945,  118,  122,  102  ],
                               [ 101, 3416,  891, 3144, 2945,  118,  123,  102 ]], dtype=torch.int64).to('cuda')
-    outputs = model.forward(input_ids, attn_mask)
+
+    input_shape = input_ids.shape
+    seq_length = input_shape[1]
+    token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
+    position_ids = torch.arange(seq_length).expand((1, -1)).to(input_ids.device)
+
+    outputs = model.forward(input_ids, token_type_ids, position_ids, attn_mask)
     print(outputs)
 
 
