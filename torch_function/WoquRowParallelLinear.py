@@ -105,7 +105,7 @@ def woqu_row_parallel_linear(
         _ZeroPoint = ZeroPoint
 
     return WoquRowParallelLinear.apply(X, W, Scale, _ZeroPoint, B, proc_group, quant_data_type,
-                                       in_features, out_features, gather_output, quant_method,
+                                       in_features, out_features, input_is_parallel, quant_method,
                                        quant_axis, group_size, has_zeropoint, float_zeropoint)
 
 
