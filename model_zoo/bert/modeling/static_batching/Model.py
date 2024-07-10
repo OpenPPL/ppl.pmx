@@ -20,9 +20,13 @@ TensorDumper = ModelUtils.__TensorDumper__()
 
 
 class BertPooler(nn.Module):
-    def __init__(self, hidden_dim):
+    def __init__(self, args: Params.BertParams,
+                 linear_bias_term: bool,
+                 proc_group: dist.ProcessGroup):
+
         super().__init__()
-        self.dense = Linear(hidden_dim, hidden_dim, True)
+        self.dense = ColumnParallelLinear(proc_group, args.hidden_dim, args.hidden_dim,
+                                          bias_term=linear_bias_term, gather_output=True)
         self.activation = nn.Tanh()
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
@@ -200,7 +204,7 @@ class BertTransformer(nn.Module):
         #self.post_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
 
         if self.with_proj_head:
-            self.pool_projection = BertPooler(params.hidden_dim)
+            self.pool_projection = BertPooler(params, True, proc_group)
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.num_layers):
