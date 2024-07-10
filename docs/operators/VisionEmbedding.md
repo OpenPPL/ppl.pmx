@@ -4,7 +4,7 @@ Applies 3 types of embedding to vision transformer's input images(Prototype is f
 
 For an input $image(batch, channels, height, width)$, firstly apply patch embedding. It is a non-overlaped convolution with $kernel(hidden\\_dim, channels, patch\\_size, patch\\_size)$:
 
-$$patch={\rm Conv}(image, kernel, stride=patch\\_size)$$
+$$patch={\rm Conv}(image, kernel, bias=patch\\_bias, stride=patch\\_size)$$
 
 Then we can get the $patch(batch, hidden\\_dim, Gh, Gw)$, where $Gh = \lfloor height / patch\\_size \rfloor$ and $Gw = \lfloor width / patch\\_size \rfloor$. But the final output of patch embedding is $patch\\_emb = (batch, Gh*Gw, hidden\\_dim)$ so we should apply a transpose with $patch$.
 
@@ -49,6 +49,12 @@ Class embedding weight.
 Shape: $(num\\_positions, hidden\\_dim)$
 
 Position embedding weight.
+
+### `patch_bias`(optional): tensor(T)
+
+Shape: $(hidden\\_dim)$
+
+Patch embedding bias
 
 ## Outputs
 
