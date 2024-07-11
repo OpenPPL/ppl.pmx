@@ -215,7 +215,9 @@ class VitTransformer(nn.Module):
         #self.post_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
 
         if self.with_proj_head:
-            self.vision_projection = Linear(params.hidden_dim, params.projection_dim, bias_term=False)
+            #self.vision_projection = Linear(params.hidden_dim, params.projection_dim, bias_term=False)
+            self.vision_projection = ColumnParallelLinear(proc_group, params.hidden_dim, params.hidden_dim,
+                                                          bias_term=False, gather_output=True)
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.num_layers):

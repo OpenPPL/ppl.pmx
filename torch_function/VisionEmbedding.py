@@ -27,8 +27,8 @@ class VisionEmbedding(torch.autograd.Function):
 
 
     @staticmethod
-    def forward(self, pixel_values: torch.Value, class_weight: torch.Value,
-                patch_weight: torch.Value, position_weight: torch.Value, patch_bias: Optional[torch.Value],
+    def forward(self, pixel_values: torch.Tensor, class_weight: torch.Tensor,
+                patch_weight: torch.Tensor, position_weight: torch.Tensor, patch_bias: Optional[torch.Tensor],
                 hidden_dim: int, patch_size: int):
         num_patches = (pixel_values.shape[-1] // patch_size) * (pixel_values.shape[-2] // patch_size)
 
@@ -49,8 +49,8 @@ class VisionEmbedding(torch.autograd.Function):
             return embeddings
 
 
-def vision_embedding(pixel_values: torch.Value, class_weight: torch.Value,
-                     patch_weight: torch.Value, position_weight: torch.Value, patch_bias: Optional[torch.Value],
+def vision_embedding(pixel_values: torch.Tensor, class_weight: torch.Tensor,
+                     patch_weight: torch.Tensor, position_weight: torch.Tensor, patch_bias: Optional[torch.Tensor],
                      hidden_dim: int, patch_size: int) -> torch.Tensor:
     return VisionEmbedding.apply(pixel_values, class_weight, patch_weight, position_weight, patch_bias,
                                  hidden_dim, patch_size)

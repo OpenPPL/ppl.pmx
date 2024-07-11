@@ -32,17 +32,17 @@ Kernel patch size of patch embedding.
 
 Shape: $(batch, channels, height, width)$
 
-### `patch_weight`(constant): tensor(T)
-
-Shape: $(hidden\\_dim, channels, patch\\_size, patch\\_size)$
-
-Patch embedding weight, which is a convolution kernel.
-
 ### `class_weight`(constant): tensor(T)
 
 Shape: $(hidden\\_dim)$
 
 Class embedding weight.
+
+### `patch_weight`(constant): tensor(T)
+
+Shape: $(hidden\\_dim, channels, patch\\_size, patch\\_size)$
+
+Patch embedding weight, which is a convolution kernel.
 
 ### `position_weight`(constant): tensor(T)
 
@@ -50,7 +50,7 @@ Shape: $(num\\_positions, hidden\\_dim)$
 
 Position embedding weight.
 
-### `patch_bias`(optional): tensor(T)
+### `patch_bias`(constant, optional): tensor(T)
 
 Shape: $(hidden\\_dim)$
 
