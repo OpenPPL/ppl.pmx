@@ -106,9 +106,12 @@ def woqu_column_parallel_linear(
     if B is not None and ZeroPoint is None:
         _ZeroPoint = torch.empty(0, device=X.device)
         has_zeropoint = False
-    else:
+    elif ZeroPoint is not None:
         _ZeroPoint = ZeroPoint
         has_zeropoint  = True
+    else:
+        _ZeroPoint = ZeroPoint
+        has_zeropoint  = False
 
     return WoquColumnParallelLinear.apply(X, W, Scale, _ZeroPoint, B, proc_group, quant_data_type,
                                       in_features, out_features, gather_output, quant_method,
