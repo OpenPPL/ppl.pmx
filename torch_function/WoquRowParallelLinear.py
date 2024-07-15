@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from typing import Optional
 
-from WeightOnlyQuantUtils import Int4QuantUtils
+from .WeightOnlyQuantUtils import Int4QuantUtils
 
 
 class WoquRowParallelLinear(torch.autograd.Function):
@@ -67,7 +67,7 @@ class WoquRowParallelLinear(torch.autograd.Function):
 
         # for row parallel, if input_is_parallel eq false, we need to split
         if torch.onnx.is_in_onnx_export():
-            output_parallel = torch.zeros(*X.shape[:-1], W.shape[0], dtype=W.dtype).to(X.device)
+            output_parallel = torch.zeros(*X.shape[:-1], W.shape[0] * 8, dtype=W.dtype).to(X.device)
             if not input_is_parallel and proc_group is not None \
                 and torch.distributed.get_world_size(proc_group) > 1:
                 rank = torch.distributed.get_rank(group=proc_group)
@@ -86,7 +86,7 @@ class WoquRowParallelLinear(torch.autograd.Function):
                 x_parallel = X
             # Matrix multiply.
             assert quant_data_type == 'int4', 'int8 dequantize is not implemented'
-            unpacked_int4_w = Int4QuantUtils.unpack(W)
+            unpacked_int4_w = Int4QuantUtils.unpack(W, 32, 4)
             dequant_fp16_w = Int4QuantUtils.dequantize_int4_to_fp16(unpacked_int4_w, Scale, ZeroPoint, group_size)
             output_parallel = F.linear(x_parallel, dequant_fp16_w, B)
             Y = output_parallel
@@ -105,7 +105,7 @@ def woqu_row_parallel_linear(
         _ZeroPoint = ZeroPoint
 
     return WoquRowParallelLinear.apply(X, W, Scale, _ZeroPoint, B, proc_group, quant_data_type,
-                                       in_features, out_features, gather_output, quant_method,
+                                       in_features, out_features, input_is_parallel, quant_method,
                                        quant_axis, group_size, has_zeropoint, float_zeropoint)
 
 
@@ -146,7 +146,7 @@ if __name__ == "__main__":
 
             # pack int4 to int16
             if self.quant_data_type == 'int4':
-                self.register_buffer('weight', torch.ones( self.out_features_per_partition // (storage_bits // 4), self.in_features, dtype=torch.int16 ))
+                self.register_buffer('weight', torch.ones( self.out_features_per_partition // (storage_bits // 4), self.in_features, dtype=torch.int16))
             elif self.quant_data_type == 'int8' and self.has_zeropoint == False:
                 self.weight = self.register_buffer('weight', torch.ones(self.out_features_per_partition, self.in_features, dtype=torch.int8))
 

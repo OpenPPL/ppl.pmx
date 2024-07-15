@@ -27,6 +27,13 @@ def load(
     with_rope: bool, # use rotary position embedding
     with_alibi: bool, # use alibi_mask for position emdedding
     quantized_cache: bool, # 8bit kv cache quantization
+    # quant
+    quant_data_type: str, # model quantization data type
+    quant_method: str, # model quantization method
+    quant_axis: int, # model quantization axis
+    group_size: int, # model quantization group size
+    storage_bits: int, # model pack storage_bits
+    #
     cache_layout: int, # change kv cache layout for hardware performance friendly
     cache_mode: int, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
     dynamic_batching: bool, # use dynamic batching scheduling
@@ -41,13 +48,13 @@ def load(
     start_time = time.time()
 
     if dynamic_batching:
-        from llama.modeling.dynamic_batching.Model import TensorDumper, Transformer
-        from llama.modeling.dynamic_batching.Pipeline import LLaMA
+        from llama3_woqu.modeling.dynamic_batching.Model import TensorDumper, Transformer
+        from llama3_woqu.modeling.dynamic_batching.Pipeline import LLaMA
         if cache_layout != 3:
             print("Info: we suggest using cache_layout 3 for cuda inference performance")
     else:
-        from llama.modeling.static_batching.Model import TensorDumper, Transformer
-        from llama.modeling.static_batching.Pipeline import LLaMA
+        from llama3_woqu.modeling.static_batching.Model import TensorDumper, Transformer
+        from llama3_woqu.modeling.static_batching.Pipeline import LLaMA
         if cache_mode:
             print("Warning: cache_mode only affected when dynamic_batching == True")
 
@@ -64,7 +71,6 @@ def load(
 
     print("Loading")
     checkpoint = torch.load(ckpt_path, map_location="cpu")
-    print(checkpoint.keys())
 
     proc_group = dist.new_group(ranks=[_ for _ in range(world_size)], backend=
                                 'gloo' if load_to_cpu else 'nccl')
@@ -96,6 +102,12 @@ def load(
                         attn_wo_bias_term,
                         ffn_linear_bias_term,
                         rotary_dim=rotary_dim,
+                        # quant
+                        quant_data_type=quant_data_type,
+                        quant_method=quant_method,
+                        quant_axis=quant_axis,
+                        group_size=group_size,
+                        storage_bits=storage_bits,
                         proc_group=proc_group)
     torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -129,6 +141,12 @@ def random(
     with_rope: bool, # use rotary position embedding
     with_alibi: bool, # use alibi_mask for position emdedding
     quantized_cache: bool, # 8bit kv cache quantization
+    # quant
+    quant_data_type: str, # model quantization data type
+    quant_method: str, # model quantization method
+    quant_axis: str, # model quantization axis
+    group_size: int, # model quantization group size
+    storage_bits: int, # model pack storage_bits
     cache_layout: int, # change kv cache layout for hardware performance friendly
     cache_mode: int, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
     dynamic_batching: bool, # use dynamic batching scheduling
@@ -143,13 +161,13 @@ def random(
     start_time = time.time()
 
     if dynamic_batching:
-        from llama.modeling.dynamic_batching.Model import TensorDumper, Transformer
-        from llama.modeling.dynamic_batching.Pipeline import LLaMA
+        from llama3_woqu.modeling.dynamic_batching.Model import TensorDumper, Transformer
+        from llama3_woqu.modeling.dynamic_batching.Pipeline import LLaMA
         if cache_layout != 3:
             print("Info: we suggest using cache_layout 3 for cuda inference performance")
     else:
-        from llama.modeling.static_batching.Model import TensorDumper, Transformer
-        from llama.modeling.static_batching.Pipeline import LLaMA
+        from llama3_woqu.modeling.static_batching.Model import TensorDumper, Transformer
+        from llama3_woqu.modeling.static_batching.Pipeline import LLaMA
         if cache_mode:
             print("Warning: cache_mode only affected when dynamic_batching == True")
 
@@ -189,6 +207,12 @@ def random(
                         attn_wo_bias_term,
                         ffn_linear_bias_term,
                         rotary_dim=rotary_dim,
+                        # quant
+                        quant_data_type=quant_data_type,
+                        quant_method=quant_method,
+                        quant_axis=quant_axis,
+                        group_size=group_size,
+                        storage_bits=storage_bits,
                         proc_group=proc_group)
     torch.set_default_tensor_type(torch.FloatTensor)
 

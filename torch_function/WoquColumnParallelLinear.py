@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from typing import Optional
 
-from WeightOnlyQuantUtils import Int4QuantUtils
+from .WeightOnlyQuantUtils import Int4QuantUtils
 
 
 class WoquColumnParallelLinear(torch.autograd.Function):
@@ -66,7 +66,7 @@ class WoquColumnParallelLinear(torch.autograd.Function):
         quant_axis: int=1, group_size: int=128, has_zeropoint: bool=False, float_zeropoint: bool=False):
 
         if torch.onnx.is_in_onnx_export():
-            output_parallel = torch.zeros(*X.shape[:-1], W.shape[0], dtype=W.dtype).to(X.device)
+            output_parallel = torch.zeros(*X.shape[:-1], W.shape[0] * 8, dtype=W.dtype).to(X.device)
             if gather_output and proc_group is not None and torch.distributed.get_world_size(proc_group) > 1:
                 last_dim = output_parallel.dim() - 1
                 rank = torch.distributed.get_rank(group=proc_group)
@@ -80,7 +80,7 @@ class WoquColumnParallelLinear(torch.autograd.Function):
         else:
             # Matrix multiply.
             assert quant_data_type == 'int4', 'int8 dequantize is not implemented'
-            unpacked_int4_w = Int4QuantUtils.unpack(W)
+            unpacked_int4_w = Int4QuantUtils.unpack(W, 32, 4)
             dequant_fp16_w = Int4QuantUtils.dequantize_int4_to_fp16(unpacked_int4_w, Scale, ZeroPoint, group_size)
             output_parallel = F.linear(X, dequant_fp16_w, B)
             # All-gather across the partitions.
