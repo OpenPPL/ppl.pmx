@@ -19,6 +19,40 @@ from ModelLayers import Linear, RMSNorm, SkipRMSNorm
 TensorDumper = ModelUtils.__TensorDumper__()
 
 
+class InternVL_MLP(nn.Module):
+    def __init__(self, args:Params.ViTParams,
+                 linear_bias_term: bool=False,
+                 proc_group: dist.ProcessGroup):
+        super().__init__()
+
+        # tmp fix
+        self.vit_hidden_dim = 3200
+        self.llm_hidden_dim = 6144
+        self.downsample_ratio = 0.5
+        self.h_w = args.image_size // args.patch_size
+
+        self.input_dim = self.vit_hidden_dim * int(1 / self.downsample_ratio) ** 2
+
+        self.pixel_shuffle =
+        self.layernorm = LayerNorm(self.input_dim, eps=args.norm_eps)
+        self.w1 = ColumnParallelLinear(proc_group, self.input_dim, self.llm_hidden_size,
+                                       bias_term=linear_bias_term, gather_output=False)
+        self.w2 = RowParallelLinear(proc_group, self.llm_hidden_dim, self.llm_hidden_dim,
+                                    bias_term=linear_bias_term, input_is_parallel=True)
+
+    def forward(self, x):
+        #h = w = int(x.shape[1] ** 0.5)
+        # transform x to nhwc data layout
+        x = OPMX.reshape(0, self.h_w, self.h_w, self.vit_hidden_dim)
+        x = self.pixel_shuffle(x)
+        x = OPMX.reshape(0, -1, self.vit_hidden_dim)
+
+        x = self.w1(x)
+        x = OPMX.gelu(x, approximate=False)
+        output = self.w2(x)
+        return output
+
+
 class VisionEmbeddings(torch.nn.Module):
     def __init__(self, hidden_dim: int, image_size: int, patch_size: int):
         super().__init__()
@@ -245,10 +279,10 @@ class VitTransformer(nn.Module):
         for layer in self.layers:
             h, norm = layer(h, norm, attn_mask)
 
+        import ipdb;ipdb.set_trace()
         output = (norm + h)[:, 0, :] # get cls token
         # TensorDumper.dump(pooled_output, "pooled_output")
-        # output = self.post_layernorm(pooled_output)
-        # TensorDumper.dump(output, "post_layernorm_out")
+
         if self.with_proj_head:
             output = self.vision_projection(output)
             # TensorDumper.dump(output, "vision_proj_out")

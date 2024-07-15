@@ -1,4 +1,4 @@
-# PixelUnShuffle
+# PixelUnshuffle
 
 Reverse the PixelShuffle operation.
 
@@ -6,13 +6,13 @@ Reverses the PixelShuffle operation by rearranging elements in a tensor of shape
 
 ## Attributes/Parameters
 
-### `scale_factor`: float
+### `scale_factor`: int
 
 factor to decrease spatial resolution by.
 
 ### `data_layout`: str
 
-input data layout, only support 'NHWC'
+input data layout, only support 'nhwc'
 
 ## Inputs
 
