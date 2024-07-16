@@ -29,7 +29,7 @@ class WoquRowParallelLinear(torch.autograd.Function):
                     quant_method_s = quant_method,
                     quant_axis_i = quant_axis,
                     group_size_i = group_size,
-                    has_zeropoint_i = True,
+                    has_zeropoint_i = has_zeropoint,
                     float_zeropoint_i = float_zeropoint)
         elif ZeroPoint is not None:
             Y = g.op("opmx::WoquRowParallelLinear", X, W, Scale, ZeroPoint,
@@ -41,7 +41,7 @@ class WoquRowParallelLinear(torch.autograd.Function):
                     quant_method_s = quant_method,
                     quant_axis_i = quant_axis,
                     group_size_i = group_size,
-                    has_zeropoint_i = True,
+                    has_zeropoint_i = has_zeropoint,
                     float_zeropoint_i = float_zeropoint)
         else:
             Y = g.op("opmx::WoquRowParallelLinear", X, W, Scale,
@@ -53,7 +53,7 @@ class WoquRowParallelLinear(torch.autograd.Function):
                      quant_method_s = quant_method,
                      quant_axis_i = quant_axis,
                      group_size_i = group_size,
-                     has_zeropoint_i = False,
+                     has_zeropoint_i = has_zeropoint,
                      float_zeropoint_i = False)
         return Y
 
@@ -107,16 +107,16 @@ def woqu_row_parallel_linear(
     X: torch.Tensor, W: torch.Tensor, Scale: torch.Value, ZeroPoint: Optional[torch.Value],
     B: Optional[torch.Value], proc_group: dist.ProcessGroup, quant_data_type: str, in_features: int,
     out_features: int, input_is_parallel: bool = False, quant_method: str='', quant_axis: int=1,
-    group_size: int=128, pack_scale: int=8, has_zeropoint: bool=False, float_zeropoint: bool=False) -> torch.Tensor:
+    group_size: int=128, has_zeropoint: bool=False, float_zeropoint: bool=False) -> torch.Tensor:
 
-    if B is not None and ZeroPoint is None:
+    if B is not None:
         _ZeroPoint = torch.empty(0, device=X.device)
     else:
         _ZeroPoint = ZeroPoint
 
     return WoquRowParallelLinear.apply(X, W, Scale, _ZeroPoint, B, proc_group, quant_data_type,
                                        in_features, out_features, input_is_parallel, quant_method,
-                                       quant_axis, group_size, pack_scale, has_zeropoint, float_zeropoint)
+                                       quant_axis, group_size, has_zeropoint, float_zeropoint)
 
 
 if __name__ == "__main__":

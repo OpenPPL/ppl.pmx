@@ -35,6 +35,8 @@ def main(
     quant_axis: int = 1, # model quantization axis
     group_size: int = 128, # model quantization group size
     storage_bits: int = 32, # storage bits for quantization
+    has_zeropoint: bool = False, # model zeropoint
+    float_zeropoint: bool = False, # model float zeropoint
     #
     dynamic_batching: bool = True, # use dynamic batching scheduling
     context_chunking: bool = True, # enable context chunking for dynamic batching
@@ -64,6 +66,8 @@ def main(
         quant_axis=quant_axis,
         group_size=group_size,
         storage_bits=storage_bits,
+        has_zeropoint=has_zeropoint,
+        float_zeropoint=float_zeropoint,
         #
         cache_layout=cache_layout,
         cache_mode=cache_mode,

@@ -26,6 +26,9 @@ def main(
     quant_axis: int = 1, # model quantization axis
     group_size: int = 128, # model quantization group size
     storage_bits: int = 32, # model pack storage_bits
+    has_zeropoint: bool = False, # zeropoint 
+    float_zeropoint: bool = False, # float zeropoint
+    # 
     cache_layout: int = 0, # change kv cache layout for hardware performance friendly
     cache_mode: int = 0, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
     dynamic_batching: bool = True, # use dynamic batching scheduling
@@ -57,6 +60,8 @@ def main(
         quant_axis=quant_axis,
         group_size=group_size,
         storage_bits=storage_bits,
+        has_zeropoint=has_zeropoint, 
+        float_zeropoint=float_zeropoint,
         #
         cache_layout=cache_layout,
         cache_mode=cache_mode,

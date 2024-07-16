@@ -244,17 +244,25 @@ class WoquColumnParallelLinear(torch.nn.Module):
         else:
             self.register_parameter("bias", None)
 
-        self.zero_point = None
         if self.has_zeropoint:
-            self.register_buffer('zero_point', torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.int32, requires_grad=False))
-        if self.float_zeropoint:
-            self.register_buffer('zero_point', torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.float32, requires_grad=False))
+            dtype = torch.float32 if self.float_zeropoint else torch.int32
+            self.register_buffer(
+                'zeropoint', 
+                torch.ones(
+                    self.out_features_per_partition, 
+                    self.in_features // self.group_size, 
+                    dtype=dtype, 
+                    requires_grad=False
+                )
+            )
+        else:
+            self.register_parameter("zeropoint", None)
         
         self.scale = nn.Parameter(torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.float32, requires_grad=False))
 
     def forward(self, X: torch.Tensor):
         return OPMX.woqu_column_parallel_linear(
-            X, self.qweight, self.scale, self.zero_point, self.bias, self.proc_group, self.quant_data_type,
+            X, self.qweight, self.scale, self.zeropoint, self.bias, self.proc_group, self.quant_data_type,
             self.in_features, self.out_features, self.gather_output, self.quant_method, self.quant_axis,
             self.group_size, self.has_zeropoint, self.float_zeropoint)
 
@@ -307,16 +315,25 @@ class WoquRowParallelLinear(torch.nn.Module):
         else:
             self.register_parameter("bias", None)
 
-        self.zero_point = None
         if self.has_zeropoint:
-            self.register_buffer('zero_point', torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.int32, requires_grad=False))
-        if self.float_zeropoint:
-            self.register_buffer('zero_point', torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.float32, requires_grad=False))
+            dtype = torch.float32 if self.float_zeropoint else torch.int32
+            self.register_buffer(
+                'zeropoint', 
+                torch.ones(
+                    self.out_features_per_partition, 
+                    self.in_features // self.group_size, 
+                    dtype=dtype, 
+                    requires_grad=False
+                )
+            )
+        else:
+            self.register_parameter("zeropoint", None)
+        
         
         self.scale = nn.Parameter(torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.float32, requires_grad=False))
 
     def forward(self, X: torch.Tensor):
         return OPMX.woqu_row_parallel_linear(
-            X, self.qweight, self.scale, self.zero_point, self.bias, self.proc_group, self.quant_data_type,
+            X, self.qweight, self.scale, self.zeropoint, self.bias, self.proc_group, self.quant_data_type,
             self.in_features, self.out_features, self.input_is_parallel, self.quant_method, self.quant_axis,
             self.group_size, self.has_zeropoint, self.float_zeropoint)

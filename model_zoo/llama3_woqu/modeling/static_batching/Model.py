@@ -1,6 +1,7 @@
 import sys
 import os
 
+from tqdm import tqdm
 import torch
 from torch import nn
 import torch.distributed as dist
@@ -37,6 +38,8 @@ class Attention(nn.Module):
             quant_axis: int,
             group_size: int,
             storage_bits: int,
+            has_zeropoint: bool,
+            float_zeropoint: bool,
             proc_group: dist.ProcessGroup):
         super().__init__()
 
@@ -67,29 +70,35 @@ class Attention(nn.Module):
         self.rope_scaling_type = args.rope_scaling_type
         self.rope_scaling_factor = args.rope_scaling_factor
         self.max_position_embeddings = args.max_position_embeddings
+        
 
         if self.fused_qkv:
             self.wqkv = WoquColumnParallelLinear(
                 proc_group, args.hidden_dim, args.hidden_dim + 2 * self.num_kv_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, quant_data_type=quant_data_type, quant_method=quant_method, 
-                    quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, gather_output=False)
+                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, has_zeropoint=has_zeropoint, 
+                float_zeropoint=float_zeropoint, gather_output=False)
         else:
             self.wq = WoquColumnParallelLinear(
                 proc_group, args.hidden_dim, args.hidden_dim,
                 bias_term=attn_wqkv_bias_term, quant_data_type=quant_data_type, quant_method=quant_method, 
-                    quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, gather_output=False)
+                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, has_zeropoint=has_zeropoint, 
+                float_zeropoint=float_zeropoint, gather_output=False)
             self.wk = WoquColumnParallelLinear(
                 proc_group, args.hidden_dim, self.num_kv_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, quant_data_type=quant_data_type, quant_method=quant_method, 
-                    quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, gather_output=False)
+                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, has_zeropoint=has_zeropoint, 
+                float_zeropoint=float_zeropoint, gather_output=False)
             self.wv = WoquColumnParallelLinear(
                 proc_group, args.hidden_dim, self.num_kv_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, quant_data_type=quant_data_type, quant_method=quant_method, 
-                    quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, gather_output=False)
+                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, has_zeropoint=has_zeropoint, 
+                float_zeropoint=float_zeropoint, gather_output=False)
         self.wo = WoquRowParallelLinear(
             proc_group, args.hidden_dim, args.hidden_dim,
             bias_term=attn_wo_bias_term, quant_data_type=quant_data_type, quant_method=quant_method, 
-                    quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, input_is_parallel=True)
+            quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, has_zeropoint=has_zeropoint, 
+            float_zeropoint=float_zeropoint, input_is_parallel=True)
 
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor],
@@ -174,6 +183,8 @@ class FeedForward(nn.Module):
         quant_axis: int,
         group_size: int,
         storage_bits: int,
+        has_zeropoint: bool,
+        float_zeropoint: bool,
         proc_group: dist.ProcessGroup
     ):
         super().__init__()
@@ -184,20 +195,25 @@ class FeedForward(nn.Module):
             self.wu = WoquColumnParallelLinear(
                 proc_group, args.hidden_dim, 2 * args.intermediate_dim,
                 bias_term=linear_bias_term, quant_data_type=quant_data_type, quant_method=quant_method,
-                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, gather_output=False)
+                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, has_zeropoint=has_zeropoint, 
+                float_zeropoint=float_zeropoint, gather_output=False)
         else:
             self.w1 = WoquColumnParallelLinear(
                 proc_group, args.hidden_dim, args.intermediate_dim,
                 bias_term=linear_bias_term, quant_data_type=quant_data_type, quant_method=quant_method,
-                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, gather_output=False)
+                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, has_zeropoint=has_zeropoint, 
+                float_zeropoint=float_zeropoint, gather_output=False)
             self.w3 = WoquColumnParallelLinear(
                 proc_group, args.hidden_dim, args.intermediate_dim,
                 bias_term=linear_bias_term, quant_data_type=quant_data_type, quant_method=quant_method,
-                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, gather_output=False)
+                quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, has_zeropoint=has_zeropoint, 
+                float_zeropoint=float_zeropoint, gather_output=False)
+            
         self.w2 = WoquRowParallelLinear(
             proc_group, args.intermediate_dim, args.hidden_dim,
             bias_term=linear_bias_term, quant_data_type=quant_data_type, quant_method=quant_method,
-            quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, input_is_parallel=True)
+            quant_axis=quant_axis, group_size=group_size, storage_bits=storage_bits, has_zeropoint=has_zeropoint, 
+            float_zeropoint=float_zeropoint, input_is_parallel=True)
 
 
     def forward(self, x):
@@ -237,6 +253,8 @@ class TransformerBlock(nn.Module):
                  quant_axis: int,
                  group_size: int,
                  storage_bits: int,
+                 has_zeropoint: bool,
+                 float_zeropoint: bool,
                  proc_group: dist.ProcessGroup):
         super().__init__()
         self.attention = Attention(args,
@@ -256,6 +274,8 @@ class TransformerBlock(nn.Module):
                                    quant_axis=quant_axis,
                                    group_size=group_size,
                                    storage_bits=storage_bits,
+                                   has_zeropoint=has_zeropoint,
+                                   float_zeropoint=float_zeropoint,
                                    proc_group=proc_group)
         self.feed_forward = FeedForward(args,
                                         layer_id,
@@ -267,6 +287,8 @@ class TransformerBlock(nn.Module):
                                         quant_axis=quant_axis,
                                         group_size=group_size,
                                         storage_bits=storage_bits,
+                                        has_zeropoint=has_zeropoint,
+                                        float_zeropoint=float_zeropoint,
                                         proc_group=proc_group)
 
         self.layer_id = layer_id
@@ -306,6 +328,8 @@ class Transformer(nn.Module):
                  quant_axis: int,
                  group_size: int,
                  storage_bits: int,
+                 has_zeropoint: bool,
+                 float_zeropoint: bool,
                  proc_group: dist.ProcessGroup):
         super().__init__()
         self.params = params
@@ -327,6 +351,17 @@ class Transformer(nn.Module):
         self.local_q_dim = num_local_heads * head_dim
         self.local_kv_dim = num_local_kv_heads * head_dim
         self.local_imm_dim = params.intermediate_dim // world_size 
+        if quant_data_type == "int4":
+            self.local_q_quant_dim = num_local_heads * head_dim // (storage_bits // 4)
+            self.local_kv_quant_dim = num_local_kv_heads * head_dim // (storage_bits // 4)
+            self.local_imm_quant_dim = params.intermediate_dim // world_size // (storage_bits // 4)
+        elif quant_data_type == "int8":
+            self.local_q_quant_dim = num_local_heads * head_dim // (storage_bits // 8)
+            self.local_kv_quant_dim = num_local_kv_heads * head_dim // (storage_bits // 8)
+            self.local_imm_quant_dim = params.intermediate_dim // world_size // (storage_bits // 8)
+        else:
+            raise ValueError("quant_data_type must be one of int4 or int8")
+
 
         self.tok_embeddings = ParallelEmbedding(proc_group, params.vocab_size, params.hidden_dim)
 
@@ -351,6 +386,8 @@ class Transformer(nn.Module):
                 quant_axis,
                 group_size,
                 storage_bits,
+                has_zeropoint,
+                float_zeropoint,
                 proc_group=proc_group))
 
         self.norm = SkipRMSNorm(params.hidden_dim, eps=params.norm_eps)
@@ -399,16 +436,17 @@ class Transformer(nn.Module):
         model_params = {key: value for key, value in self.named_parameters()}
         model_buffers = {key: value for key, value in self.named_buffers()}
 
-        for key, value in state_dict.items():
+
+        for key, value in tqdm(state_dict.items(), desc="Processing layers"):
             module_name, param_name = key.rsplit(".", 1)
             if key in model_params:
                 self.get_submodule(module_name)._parameters[param_name][:] = value
                 loaded.add(key)
-                print(f'Loaded: {key} -> {key}[{value.shape}]')
+                # print(f'Loaded: {key} -> {key}[{value.shape}]')
             elif key in model_buffers:
                 self.get_submodule(module_name)._buffers[param_name][:] = value
                 loaded.add(key)
-                print(f'Loaded: {key} -> {key}[{value.shape}]')
+                # print(f'Loaded: {key} -> {key}[{value.shape}]')
 
             try:
                 if self.fused_qkv:
@@ -419,17 +457,17 @@ class Transformer(nn.Module):
                             self.get_submodule(module_name)._buffers[param_name][
                                 :self.local_q_quant_dim] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
-                        elif param_name == "zero_point":
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                        elif param_name == "zeropoint":
                             self.get_submodule(module_name)._buffers[param_name][
                                 :self.local_q_dim] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
                         else:
                             self.get_submodule(module_name)._parameters[param_name][
                                 :self.local_q_dim] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
                     elif 'attention.wk' in key:
                         loaded.add(key)
                         module_name = module_name.replace('wk', 'wqkv')
@@ -437,17 +475,17 @@ class Transformer(nn.Module):
                             self.get_submodule(module_name)._buffers[param_name][
                                 self.local_q_quant_dim:self.local_q_quant_dim + self.local_kv_quant_dim] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
-                        elif param_name == "zero_point":
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                        elif param_name == "zeropoint":
                             self.get_submodule(module_name)._buffers[param_name][
                                 self.local_q_dim:self.local_q_dim + self.local_kv_dim] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
                         else:
                             self.get_submodule(module_name)._parameters[param_name][
                                 self.local_q_dim:self.local_q_dim + self.local_kv_dim] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
                     elif 'attention.wv' in key:
                         loaded.add(key)
                         module_name = module_name.replace('wv', 'wqkv')
@@ -456,19 +494,19 @@ class Transformer(nn.Module):
                                 self.local_q_quant_dim + self.local_kv_quant_dim:
                                 self.local_q_quant_dim + self.local_kv_quant_dim * 2] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
-                        elif param_name == "zero_point":
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                        elif param_name == "zeropoint":
                             self.get_submodule(module_name)._buffers[param_name][
                                 self.local_q_dim + self.local_kv_dim:
                                 self.local_q_dim + self.local_kv_dim * 2] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
                         else:
                             self.get_submodule(module_name)._parameters[param_name][
                                 self.local_q_dim + self.local_kv_dim:
                                 self.local_q_dim + self.local_kv_dim * 2] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
                 if self.fused_ffn_glu:
                     if 'feed_forward.w1' in key:
                         loaded.add(key)
@@ -477,19 +515,19 @@ class Transformer(nn.Module):
                             self.get_submodule(module_name)._buffers[param_name][
                                 :self.local_imm_quant_dim] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
-                        elif param_name == "zero_point":
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                        elif param_name == "zeropoint":
                             module_name = module_name.replace('w1', 'wu')
                             self.get_submodule(module_name)._buffers[param_name][
                                 :self.local_imm_dim] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
                         else:
                             module_name = module_name.replace('w1', 'wu')
                             self.get_submodule(module_name)._parameters[param_name][
                                 :self.local_imm_dim] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
                     if 'feed_forward.w3' in key:
                         loaded.add(key)
                         module_name = module_name.replace('w3', 'wu')
@@ -497,17 +535,17 @@ class Transformer(nn.Module):
                             self.get_submodule(module_name)._buffers[param_name][
                                 self.local_imm_quant_dim:] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
-                        elif param_name == "zero_point":
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                        elif param_name == "zeropoint":
                             self.get_submodule(module_name)._buffers[param_name][
                                 self.local_imm_dim:] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
                         else:
                             self.get_submodule(module_name)._parameters[param_name][
                                 self.local_imm_dim:] = value
                             replaced_key = module_name + '.' + param_name
-                            print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                            # print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
             except AttributeError as e:
                 raise Exception(f'Failed to inject model weight {key}, can not find corresponding layer.')
 

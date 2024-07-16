@@ -110,17 +110,12 @@ def woqu_column_parallel_linear(
     X: torch.Tensor, W: torch.Tensor, Scale: torch.Value, ZeroPoint: Optional[torch.Value],
     B: Optional[torch.Value], proc_group: dist.ProcessGroup, quant_data_type: str, in_features: int,
     out_features: int, gather_output: bool = True, quant_method: str='', quant_axis: int=1,
-    group_size: int=128, float_zeropoint: bool=False) -> torch.Tensor:
+    group_size: int=128, has_zeropoint: bool=False, float_zeropoint: bool=False) -> torch.Tensor:
 
-    if B is not None and ZeroPoint is None:
+    if B is not None:
         _ZeroPoint = torch.empty(0, device=X.device)
-        has_zeropoint = False
-    elif ZeroPoint is not None:
-        _ZeroPoint = ZeroPoint
-        has_zeropoint  = True
     else:
         _ZeroPoint = ZeroPoint
-        has_zeropoint  = False
 
     return WoquColumnParallelLinear.apply(X, W, Scale, _ZeroPoint, B, proc_group, quant_data_type,
                                       in_features, out_features, gather_output, quant_method,

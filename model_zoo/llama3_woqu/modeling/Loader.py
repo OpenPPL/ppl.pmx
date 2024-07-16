@@ -33,6 +33,8 @@ def load(
     quant_axis: int, # model quantization axis
     group_size: int, # model quantization group size
     storage_bits: int, # model pack storage_bits
+    has_zeropoint: bool, # model zeropoint
+    float_zeropoint: bool, # model float zeropoint
     #
     cache_layout: int, # change kv cache layout for hardware performance friendly
     cache_mode: int, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
@@ -108,6 +110,9 @@ def load(
                         quant_axis=quant_axis,
                         group_size=group_size,
                         storage_bits=storage_bits,
+                        has_zeropoint=has_zeropoint,
+                        float_zeropoint=float_zeropoint,
+                        #
                         proc_group=proc_group)
     torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -147,6 +152,9 @@ def random(
     quant_axis: str, # model quantization axis
     group_size: int, # model quantization group size
     storage_bits: int, # model pack storage_bits
+    has_zeropoint: bool, 
+    float_zeropoint: bool,
+    #
     cache_layout: int, # change kv cache layout for hardware performance friendly
     cache_mode: int, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
     dynamic_batching: bool, # use dynamic batching scheduling
@@ -213,6 +221,8 @@ def random(
                         quant_axis=quant_axis,
                         group_size=group_size,
                         storage_bits=storage_bits,
+                        has_zeropoint=has_zeropoint, 
+                        float_zeropoint=float_zeropoint,
                         proc_group=proc_group)
     torch.set_default_tensor_type(torch.FloatTensor)
 
