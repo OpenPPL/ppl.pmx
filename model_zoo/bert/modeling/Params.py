@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 @dataclass
-class ViTParams:
+class BertParams:
     hidden_dim: int = 512
     intermediate_dim: int = 2048
 
@@ -11,10 +11,8 @@ class ViTParams:
     num_kv_heads: Optional[int] = None
 
     norm_eps: float = 1e-5
+    vocab_size: int = -1
 
-    image_size: int = 224
-    patch_size: int = 32
-    projection_dim: int = 512
-    
-    llm_hidden_dim: int = 512
-    downsample_ratio: int = 2
+    position_embedding_type: str = 'absolute'
+    type_vocab_size: int = 2
+    max_position_embeddings: int=2048

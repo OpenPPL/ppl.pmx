@@ -11,68 +11,37 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
 import torch_function as OPMX
 
-import clip_vit.modeling.Params as Params
+import bert.modeling.Params as Params
 import ModelUtils
-from ModelParallel import ColumnParallelLinear, RowParallelLinear
-from ModelLayers import Linear, RMSNorm, SkipRMSNorm, LayerNorm
-
+from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding
+from ModelLayers import Linear, LayerNorm, SkipLayerNorm
 
 TensorDumper = ModelUtils.__TensorDumper__()
 
 
-class InternVL_MLP(nn.Module):
-    def __init__(self,
-                 args: Params.ViTParams,
+class BertPooler(nn.Module):
+    def __init__(self, args: Params.BertParams,
                  linear_bias_term: bool,
                  proc_group: dist.ProcessGroup):
+
         super().__init__()
+        self.dense = ColumnParallelLinear(proc_group, args.hidden_dim, args.hidden_dim,
+                                          bias_term=linear_bias_term, gather_output=True)
+        self.activation = nn.Tanh()
 
-        self.vit_hidden_dim = args.hidden_dim
-        self.llm_hidden_dim = args.llm_hidden_dim
-        self.downsample_ratio = args.downsample_ratio
-        self.h_w = args.image_size // args.patch_size
-        self.input_dim = self.vit_hidden_dim * self.downsample_ratio ** 2
-
-        self.layernorm = LayerNorm(self.input_dim, eps=args.norm_eps)
-        self.w1 = ColumnParallelLinear(proc_group, self.input_dim, self.llm_hidden_dim,
-                                       bias_term=linear_bias_term, gather_output=False)
-        self.w2 = RowParallelLinear(proc_group, self.llm_hidden_dim, self.llm_hidden_dim,
-                                    bias_term=linear_bias_term, input_is_parallel=True)
-
-    def forward(self, x):
-        #h = w = int(x.shape[1] ** 0.5)
-        # transform x to nhwc data layout
-        x = OPMX.reshape(x, (0, self.h_w, self.h_w, self.vit_hidden_dim))
-        x = OPMX.pixel_unshuffle(x, self.downsample_ratio, 'nhwc')
-        x = OPMX.reshape(x, (0, -1, self.input_dim))
-
-        x = self.w1(x)
-        x = OPMX.gelu(x, approximate=False)
-        output = self.w2(x)
-        return output
-
-
-class VisionEmbeddings(torch.nn.Module):
-    def __init__(self, hidden_dim: int, image_size: int, patch_size: int):
-        super().__init__()
-        self.hidden_dim = hidden_dim
-        self.image_size = image_size
-        self.patch_size = patch_size
-        self.num_positions = (self.image_size // self.patch_size) ** 2 + 1
-
-        self.cls_emb_weight = nn.Parameter(torch.randn(self.hidden_dim))
-        self.patch_emb_weight  = nn.Parameter(torch.randn([self.hidden_dim, 3, patch_size, patch_size]))
-        self.patch_emb_bias  = nn.Parameter(torch.randn([self.hidden_dim]))
-        self.pos_emb_weight = nn.Parameter(torch.randn(self.num_positions, self.hidden_dim))
-
-    def forward(self, pixel_values: torch.Tensor):
-        return OPMX.vision_embedding(pixel_values, self.cls_emb_weight, self.patch_emb_weight, self.pos_emb_weight, self.patch_emb_bias, self.hidden_dim, self.patch_size)
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        # We "pool" the model by simply taking the hidden state corresponding
+        # to the first token.
+        first_token_tensor = hidden_states[:, 0]
+        pooled_output = self.dense(first_token_tensor)
+        pooled_output = self.activation(pooled_output)
+        return pooled_output
 
 
 class Attention(nn.Module):
     def __init__(
             self,
-            args: Params.ViTParams,
+            args: Params.BertParams,
             layer_id: int,
             fused_qkv: bool,
             attn_wqkv_bias_term: bool,
@@ -109,35 +78,23 @@ class Attention(nn.Module):
             proc_group, args.hidden_dim, args.hidden_dim,
             bias_term=attn_wo_bias_term, input_is_parallel=True)
 
-        self.q_norm = RMSNorm(args.hidden_dim, eps=args.norm_eps)
-        self.k_norm = RMSNorm(args.hidden_dim, eps=args.norm_eps)
-
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor]):
         expanded_shape = (0, 0, -1, self.head_dim)
         if self.fused_qkv:
             xqkv = self.wqkv(x)
-            # xqkv = OPMX.reshape(xqkv, expanded_shape)
+            xqkv = OPMX.reshape(xqkv, expanded_shape)
             # TensorDumper.dump(xqkv, "layer{}_reshaped_xqkv".format(self.layer_id))
-            split_size = (self.num_local_heads * self.head_dim,
-                          self.num_local_kv_heads * self.head_dim,
-                          self.num_local_kv_heads * self.head_dim)
-            xq, xk, xv = torch.split(xqkv, split_size, -1)
+            split_size = (self.num_local_heads, self.num_local_kv_heads, self.num_local_kv_heads)
+            xq, xk, xv = torch.split(xqkv, split_size, -2)
         else:
             xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
-            #xq = OPMX.reshape(xq, expanded_shape)
-            #xk = OPMX.reshape(xk, expanded_shape)
-            #xv = OPMX.reshape(xv, expanded_shape)
+            xq = OPMX.reshape(xq, expanded_shape)
+            xk = OPMX.reshape(xk, expanded_shape)
+            xv = OPMX.reshape(xv, expanded_shape)
         # TensorDumper.dump(xq, "layer{}_reshaped_xq".format(self.layer_id))
         # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
         # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
-
-        xq = self.q_norm(xq)
-        xk = self.k_norm(xk)
-
-        xq = OPMX.reshape(xq, expanded_shape)
-        xk = OPMX.reshape(xk, expanded_shape)
-        xv = OPMX.reshape(xv, expanded_shape)
 
         attn = OPMX.multi_head_attention(xq, xk, xv,
                                         attn_mask=attn_mask,
@@ -156,7 +113,7 @@ class Attention(nn.Module):
 class FeedForward(nn.Module):
     def __init__(
         self,
-        args: Params.ViTParams,
+        args: Params.BertParams,
         layer_id: int,
         linear_bias_term: bool,
         proc_group: dist.ProcessGroup
@@ -174,7 +131,7 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         x1 = self.w1(x)
-        x1 = OPMX.gelu(x1, approximate=False)
+        x1 = OPMX.gelu(x1)
         # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
         output = self.w2(x1)
         # TensorDumper.dump(output, "layer{}_ffn_w2".format(self.layer_id))
@@ -183,7 +140,7 @@ class FeedForward(nn.Module):
 
 class TransformerBlock(nn.Module):
     def __init__(self, layer_id: int,
-                 args: Params.ViTParams,
+                 args: Params.BertParams,
                  fused_qkv: bool,
                  attn_wqkv_bias_term: bool,
                  attn_wo_bias_term: bool,
@@ -202,26 +159,22 @@ class TransformerBlock(nn.Module):
                                         proc_group=proc_group)
 
         self.layer_id = layer_id
-        self.ls1 = nn.Parameter(torch.ones(args.hidden_dim))
-        self.ls2 = nn.Parameter(torch.ones(args.hidden_dim))
-        self.attention_norm = SkipRMSNorm(args.hidden_dim, eps=args.norm_eps)
-        self.ffn_norm = SkipRMSNorm(args.hidden_dim, eps=args.norm_eps)
+        self.attention_norm = LayerNorm(args.hidden_dim, eps=args.norm_eps)
+        self.ffn_norm = LayerNorm(args.hidden_dim, eps=args.norm_eps)
 
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor, attn_mask: Optional[torch.Tensor]):
-        norm, res1 = self.attention_norm(x, skip) # res1 = input_x when skip == None
-        # TensorDumper.dump(norm, "layer{}_attention_norm_out".format(self.layer_id))
-        # TensorDumper.dump(res1, "layer{}_attention_norm_skip_out".format(self.layer_id))
-        attn = self.attention.forward(norm, attn_mask) * self.ls1
-        norm, res2 = self.ffn_norm(attn, res1) # res2 = attn + res1
+        attn = self.attention.forward(x, attn_mask)
+        attn_norm = self.attention_norm(attn + x)
+        ffn = self.feed_forward.forward(attn_norm)
+        ffn_norm = self.ffn_norm(ffn + attn_norm)
         # TensorDumper.dump(norm, "layer{}_ffn_norm_out".format(self.layer_id))
         # TensorDumper.dump(res2, "layer{}_ffn_norm_skip_out".format(self.layer_id))
-        ffn = self.feed_forward.forward(norm) * self.ls2
-        return ffn, res2
+        return ffn_norm, None
 
 
-class VitTransformer(nn.Module):
-    def __init__(self, params: Params.ViTParams,
+class BertTransformer(nn.Module):
+    def __init__(self, params: Params.BertParams,
                  with_proj_head: bool,
                  fused_qkv: bool,
                  attn_wqkv_bias_term: bool,
@@ -243,14 +196,15 @@ class VitTransformer(nn.Module):
         self.local_q_dim = num_local_heads * head_dim
         self.local_kv_dim = num_local_kv_heads * head_dim
 
-        self.vision_embeddings = VisionEmbeddings(params.hidden_dim, params.image_size, params.patch_size)
-        #self.pre_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
+        self.input_embeddings = ParallelEmbedding(proc_group, params.vocab_size, params.hidden_dim)
+        self.token_type_embeddings = ParallelEmbedding(proc_group, params.type_vocab_size, params.hidden_dim)
+        self.position_embeddings = ParallelEmbedding(proc_group, params.max_position_embeddings, params.hidden_dim)
+
+        self.pre_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
         #self.post_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
 
         if self.with_proj_head:
-            self.vision_projection = InternVL_MLP(params, linear_bias_term=True, proc_group=self.proc_group)
-            #self.vision_projection = ColumnParallelLinear(proc_group, params.hidden_dim, params.hidden_dim, bias_term=False, gather_output=True)
-
+            self.pool_projection = BertPooler(params, True, proc_group)
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.num_layers):
@@ -264,26 +218,28 @@ class VitTransformer(nn.Module):
 
 
     @torch.inference_mode()
-    def forward(self, pixel_values: torch.Tensor, attn_mask: Optional[torch.Tensor]):
-        TensorDumper.dump(pixel_values, "pixel_values")
+    def forward(self, input_ids: torch.Tensor, token_type_ids: torch.LongTensor,
+                position_ids: torch.LongTensor, attn_mask: Optional[torch.Tensor]):
+        TensorDumper.dump(input_ids, "input_ids")
+        TensorDumper.dump(token_type_ids, "token_type_ids")
+        TensorDumper.dump(position_ids, "position_ids")
+
         if attn_mask is not None:
             TensorDumper.dump(attn_mask, "attn_mask")
 
-        h = self.vision_embeddings(pixel_values)
+        h = self.input_embeddings(input_ids) + self.token_type_embeddings(token_type_ids) + \
+            self.position_embeddings(position_ids)
         # TensorDumper.dump(h, "emb_out")
-        # h = self.pre_layernorm(h)
+        h = self.pre_layernorm(h)
         # TensorDumper.dump(h, "pre_layernorm_out")
 
         norm = None
         for layer in self.layers:
             h, norm = layer(h, norm, attn_mask)
-
-        # output = (norm + h)[:, 0, :] # get cls token
-        # TensorDumper.dump(pooled_output, "pooled_output")
+        output =  h
 
         if self.with_proj_head:
-            output = self.vision_projection((norm+h)[:, 1:, :])
-            # TensorDumper.dump(output, "vision_proj_out")
+            output = self.pool_projection(h)
         TensorDumper.dump(output, "logits")
         return output
 
