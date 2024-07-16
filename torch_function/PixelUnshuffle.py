@@ -5,7 +5,7 @@ class PixelUnshuffle(torch.autograd.Function):
     def symbolic(g, X: torch.Value, scale_factor: int,
                  data_layout: str='nhwc'):
         Y = g.op("opmx::PixelUnshuffle", X,
-                 scale_factor_f = scale_factor,
+                 scale_factor_i = scale_factor,
                  data_layout_s = data_layout)
         return Y.setTypeAs(X)
 
@@ -35,7 +35,7 @@ class PixelUnshuffle(torch.autograd.Function):
             return Y
 
 
-def pixelunshuffle(X: torch.Tensor, scale_factor: int, data_layout: str='nhwc'):
+def pixel_unshuffle(X: torch.Tensor, scale_factor: int, data_layout: str='nhwc'):
     return PixelUnshuffle.apply(X, scale_factor, data_layout)
 
 
@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
 
         def forward(self, X: torch.Tensor):
-            return pixelunshuffle(X, self.scale_factor, self.data_layout)
+            return pixel_unshuffle(X, self.scale_factor, self.data_layout)
 
     scale_factor = 2
     inputs = torch.rand([1, 32, 32, 3200])

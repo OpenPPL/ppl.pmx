@@ -14,28 +14,26 @@ import torch_function as OPMX
 import clip_vit.modeling.Params as Params
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear
-from ModelLayers import Linear, RMSNorm, SkipRMSNorm
+from ModelLayers import Linear, RMSNorm, SkipRMSNorm, LayerNorm
 
 TensorDumper = ModelUtils.__TensorDumper__()
 
 
 class InternVL_MLP(nn.Module):
-    def __init__(self, args:Params.ViTParams,
-                 linear_bias_term: bool=False,
+    def __init__(self,
+                 args: Params.ViTParams,
+                 linear_bias_term: bool,
                  proc_group: dist.ProcessGroup):
         super().__init__()
 
-        # tmp fix
-        self.vit_hidden_dim = 3200
-        self.llm_hidden_dim = 6144
-        self.downsample_ratio = 0.5
+        self.vit_hidden_dim = args.hidden_dim
+        self.llm_hidden_dim = args.llm_hidden_dim
+        self.downsample_ratio = args.downsample_ratio
         self.h_w = args.image_size // args.patch_size
+        self.input_dim = self.vit_hidden_dim * self.downsample_ratio ** 2
 
-        self.input_dim = self.vit_hidden_dim * int(1 / self.downsample_ratio) ** 2
-
-        self.pixel_shuffle =
         self.layernorm = LayerNorm(self.input_dim, eps=args.norm_eps)
-        self.w1 = ColumnParallelLinear(proc_group, self.input_dim, self.llm_hidden_size,
+        self.w1 = ColumnParallelLinear(proc_group, self.input_dim, self.llm_hidden_dim,
                                        bias_term=linear_bias_term, gather_output=False)
         self.w2 = RowParallelLinear(proc_group, self.llm_hidden_dim, self.llm_hidden_dim,
                                     bias_term=linear_bias_term, input_is_parallel=True)
@@ -43,9 +41,9 @@ class InternVL_MLP(nn.Module):
     def forward(self, x):
         #h = w = int(x.shape[1] ** 0.5)
         # transform x to nhwc data layout
-        x = OPMX.reshape(0, self.h_w, self.h_w, self.vit_hidden_dim)
-        x = self.pixel_shuffle(x)
-        x = OPMX.reshape(0, -1, self.vit_hidden_dim)
+        x = OPMX.reshape(x, (0, self.h_w, self.h_w, self.vit_hidden_dim))
+        x = OPMX.pixel_unshuffle(x, self.downsample_ratio, 'nhwc')
+        x = OPMX.reshape(x, (0, -1, self.input_dim))
 
         x = self.w1(x)
         x = OPMX.gelu(x, approximate=False)
@@ -249,9 +247,9 @@ class VitTransformer(nn.Module):
         #self.post_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
 
         if self.with_proj_head:
-            #self.vision_projection = Linear(params.hidden_dim, params.projection_dim, bias_term=False)
-            self.vision_projection = ColumnParallelLinear(proc_group, params.hidden_dim, params.hidden_dim,
-                                                          bias_term=False, gather_output=True)
+            self.vision_projection = InternVL_MLP(params, linear_bias_term=True, proc_group=self.proc_group)
+            #self.vision_projection = ColumnParallelLinear(proc_group, params.hidden_dim, params.hidden_dim, bias_term=False, gather_output=True)
+
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.num_layers):
@@ -279,12 +277,11 @@ class VitTransformer(nn.Module):
         for layer in self.layers:
             h, norm = layer(h, norm, attn_mask)
 
-        import ipdb;ipdb.set_trace()
-        output = (norm + h)[:, 0, :] # get cls token
+        # output = (norm + h)[:, 0, :] # get cls token
         # TensorDumper.dump(pooled_output, "pooled_output")
 
         if self.with_proj_head:
-            output = self.vision_projection(output)
+            output = self.vision_projection((norm+h)[:, 1:, :])
             # TensorDumper.dump(output, "vision_proj_out")
         TensorDumper.dump(output, "logits")
         return output
