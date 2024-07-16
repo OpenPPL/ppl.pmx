@@ -64,7 +64,6 @@ def load(
 
     print("Loading")
     checkpoint = torch.load(ckpt_path, map_location="cpu")
-    print(checkpoint.keys())
 
     proc_group = dist.new_group(ranks=[_ for _ in range(world_size)], backend=
                                 'gloo' if load_to_cpu else 'nccl')
