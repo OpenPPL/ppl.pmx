@@ -31,10 +31,10 @@ Sample usage:
 
 ```
 python ConvertWeightToOpmx.py \
-    --input_dir /path/to/downloaded/hf/weights/7B --output_dir /output/path
+    --input_dir /path/to/downloaded/hf/weights/7B --output_dir /output/path --quant True
 ```
 
-Thereafter, models can be loaded via:
+Thereafter, models can be quant to weight only:
 
 ```
 Important note: you need to be able to host the whole model in RAM to execute this script (even if the biggest versions
@@ -272,29 +272,29 @@ def main():
         help="Input model type",
     )
     parser.add_argument(
-        "--quant",
-        default=False,
-        help="quant method",
+    "--quant",
+    default=False,
+    help="Enable quantization for the model. Set to True to quantize the model weights.",
     )
     parser.add_argument(
         "--group_size",
         default=128,
-        help="quant group size",
+        help="Specify the size of groups for quantization. Determines how weights are grouped for quantization.",
     )
     parser.add_argument(
         "--n_bits",
         default=4,
-        help="quant bit",
+        help="Set the number of bits for quantization. Determines the precision of the quantized weights.",
     )
     parser.add_argument(
         "--has_zeropoint",
         default=False,
-        help="quant zeropoint",
+        help="Include zero-point in quantization. Set to True to use zero-point quantization.",
     )
     parser.add_argument(
         "--storage_bits",
-        default=16,
-        help="quant pack bits",
+        default=32,
+        help="Specify the number of bits for packing quantized values. Determines the storage size for quantized data.",
     )
     args = parser.parse_args()
     write_pmx_model(

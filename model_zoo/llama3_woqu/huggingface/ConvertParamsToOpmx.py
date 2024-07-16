@@ -28,7 +28,7 @@ Write JSON file for hf models
 Sample usage:
 
 ```
-python convert_hf_weights_to_pmx.py \
+python huggingface/convert_hf_weights_to_pmx.py \
     --input_dir /path/to/downloaded/hf/weights/7B --output_dir /output/path
 ```
 

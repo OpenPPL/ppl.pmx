@@ -67,7 +67,13 @@ class WoquRowParallelLinear(torch.autograd.Function):
 
         # for row parallel, if input_is_parallel eq false, we need to split
         if torch.onnx.is_in_onnx_export():
-            output_parallel = torch.zeros(*X.shape[:-1], W.shape[0] * 8, dtype=W.dtype).to(X.device)
+            if W.dtype == torch.int32:
+                output_parallel = torch.zeros(*X.shape[:-1], W.shape[0] * 8, dtype=W.dtype).to(X.device)
+            elif W.dtype == torch.int16:
+                output_parallel = torch.zeros(*X.shape[:-1], W.shape[0] * 4, dtype=W.dtype).to(X.device)
+            else:
+                output_parallel = torch.zeros(*X.shape[:-1], W.shape[0], dtype=W.dtype).to(X.device)
+                
             if not input_is_parallel and proc_group is not None \
                 and torch.distributed.get_world_size(proc_group) > 1:
                 rank = torch.distributed.get_rank(group=proc_group)
@@ -86,7 +92,11 @@ class WoquRowParallelLinear(torch.autograd.Function):
                 x_parallel = X
             # Matrix multiply.
             assert quant_data_type == 'int4', 'int8 dequantize is not implemented'
-            unpacked_int4_w = Int4QuantUtils.unpack(W, 32, 4)
+            if W.dtype == torch.int32:
+                unpacked_int4_w = Int4QuantUtils.unpack(W, 32, 4)
+            elif W.dtype == torch.int16:
+                unpacked_int4_w = Int4QuantUtils.unpack(W, 16, 4)
+
             dequant_fp16_w = Int4QuantUtils.dequantize_int4_to_fp16(unpacked_int4_w, Scale, ZeroPoint, group_size)
             output_parallel = F.linear(x_parallel, dequant_fp16_w, B)
             Y = output_parallel
@@ -97,7 +107,7 @@ def woqu_row_parallel_linear(
     X: torch.Tensor, W: torch.Tensor, Scale: torch.Value, ZeroPoint: Optional[torch.Value],
     B: Optional[torch.Value], proc_group: dist.ProcessGroup, quant_data_type: str, in_features: int,
     out_features: int, input_is_parallel: bool = False, quant_method: str='', quant_axis: int=1,
-    group_size: int=128, has_zeropoint: bool=False, float_zeropoint: bool=False) -> torch.Tensor:
+    group_size: int=128, pack_scale: int=8, has_zeropoint: bool=False, float_zeropoint: bool=False) -> torch.Tensor:
 
     if B is not None and ZeroPoint is None:
         _ZeroPoint = torch.empty(0, device=X.device)
@@ -106,7 +116,7 @@ def woqu_row_parallel_linear(
 
     return WoquRowParallelLinear.apply(X, W, Scale, _ZeroPoint, B, proc_group, quant_data_type,
                                        in_features, out_features, input_is_parallel, quant_method,
-                                       quant_axis, group_size, has_zeropoint, float_zeropoint)
+                                       quant_axis, group_size, pack_scale, has_zeropoint, float_zeropoint)
 
 
 if __name__ == "__main__":
