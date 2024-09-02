@@ -41,4 +41,6 @@ from .Swish import swish
 from .GroupNorm import group_norm
 from .Pad import pad
 
+from .TensorParallelRMSNorm import tensor_parallel_rms_norm
+
 from . import dynamic_batching
