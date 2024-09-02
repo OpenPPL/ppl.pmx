@@ -251,9 +251,6 @@ class VitTransformer(nn.Module):
         self.fused_qkv = fused_qkv
 
         world_size = 1 if proc_group is None else proc_group.size()
-        #num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
-        #num_local_heads = params.num_heads // world_size
-        #num_local_kv_heads = num_kv_heads // world_size
         # fix for pad
         num_kv_heads = params.padded_num_heads if params.padded_num_kv_heads is None else params.padded_num_kv_heads
         num_local_heads = params.padded_num_heads // world_size
@@ -265,8 +262,8 @@ class VitTransformer(nn.Module):
         self.vision_embeddings = VisionEmbeddings(params.hidden_dim, params.image_size, params.patch_size)
 
         if self.with_proj_head:
-            self.vision_projection = InternVL_MLP(params, linear_bias_term=True, proc_group=self.proc_group)
-            #self.vision_projection = ColumnParallelLinear(proc_group, params.hidden_dim, params.hidden_dim, bias_term=False, gather_output=True)
+            self.vision_projection = InternVL_MLP(params, linear_bias_term=True, proc_group=self.proc_group) # for internvl vit
+            #self.vision_projection = ColumnParallelLinear(proc_group, params.hidden_dim, params.hidden_dim, bias_term=False, gather_output=True) # for intern vit
 
 
         self.layers = torch.nn.ModuleList()
@@ -302,6 +299,8 @@ class VitTransformer(nn.Module):
         if self.with_proj_head:
             output = self.vision_projection((norm+h)[:, 1:, :])
             # TensorDumper.dump(output, "vision_proj_out")
+        else:
+            output = norm + h
         TensorDumper.dump(output, "logits")
         return output
 

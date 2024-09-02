@@ -45,7 +45,7 @@ def write_json(text, path):
         json.dump(text, f)
 
 
-def write_pmx_model(model_path, input_base_path):
+def write_pmx_model(model_path, input_base_path, pad_to_head):
     os.makedirs(model_path, exist_ok=True)
     print ("Loading the checkpoint in a HF model")
 
@@ -69,6 +69,12 @@ def write_pmx_model(model_path, input_base_path):
     dims_per_head = pmx_params_dict['hidden_dim'] // num_heads
     key_value_dim = dims_per_head * num_kv_heads
 
+    # process pad params
+    pmx_params_dict['padded_num_heads'] = (num_heads + pad_to_head - 1) // pad_to_head * pad_to_head
+    pmx_params_dict['qk_norm_scale'] = num_heads / pmx_params_dict['padded_num_heads']
+    pmx_params_dict['padded_num_kv_heads'] = (num_kv_heads + pad_to_head - 1) // pad_to_head * pad_to_head
+    pmx_params_dict['head_dim'] = dims_per_head
+
     # compute intermediate_size
     pmx_params_dict['intermediate_dim'] = params.get('intermediate_size')
     write_json(pmx_params_dict, os.path.join(model_path, "opmx_params.json"))
@@ -84,17 +90,37 @@ def write_pmx_model(model_path, input_base_path):
         split_dim = [head * dims_per_head for head in [num_heads, num_kv_heads, num_kv_heads]]
         wq, wk, wv = hf_model_state_dict[f"encoder.layers.{layer_i}.attn.qkv.weight"].split(split_dim, dim=0)
 
-        state_dict.update({
-            f"layers.{layer_i}.attention.wq.weight": wq,
-            f"layers.{layer_i}.attention.wk.weight": wk,
-            f"layers.{layer_i}.attention.wv.weight": wv,
+        tmp_wq = torch.zeros(size=[ pmx_params_dict['padded_num_heads'] * dims_per_head, wq.shape[1]], dtype=wq.dtype)
+        tmp_wk = torch.zeros(size=[ pmx_params_dict['padded_num_kv_heads'] * dims_per_head, wk.shape[1]], dtype=wk.dtype)
+        tmp_wv = torch.zeros(size=[ pmx_params_dict['padded_num_kv_heads'] * dims_per_head, wv.shape[1]], dtype=wv.dtype)
+        tmp_wq[:wq.shape[0], :] = wq
+        tmp_wk[:wk.shape[0], :] = wk
+        tmp_wv[:wv.shape[0], :] = wv
 
-            f"layers.{layer_i}.attention.wo.weight": hf_model_state_dict[f"encoder.layers.{layer_i}.attn.proj.weight"],
+        tmp_wo = torch.zeros(size=[wq.shape[0], pmx_params_dict['padded_num_heads'] * dims_per_head], dtype=wq.dtype)
+        #tmp_wo_bias = torch.zeros(size=[(num_heads+1) * dims_per_head], dtype=wq.dtype)
+        tmp_wo[:, :wq.shape[1]] = hf_model_state_dict[f"encoder.layers.{layer_i}.attn.proj.weight"]
+
+
+        q_norm_w = hf_model_state_dict[f"encoder.layers.{layer_i}.attn.q_norm.weight"]
+        k_norm_w = hf_model_state_dict[f"encoder.layers.{layer_i}.attn.k_norm.weight"]
+        tmp_q_norm_w = torch.zeros(size=[ pmx_params_dict['padded_num_heads'] * dims_per_head], dtype=wq.dtype)
+        tmp_k_norm_w = torch.zeros(size=[ pmx_params_dict['padded_num_kv_heads'] * dims_per_head], dtype=wq.dtype)
+
+        tmp_q_norm_w[:q_norm_w.shape[0]] =  q_norm_w
+        tmp_k_norm_w[:k_norm_w.shape[0]] =  k_norm_w
+
+        state_dict.update({
+            f"layers.{layer_i}.attention.wq.weight": tmp_wq,
+            f"layers.{layer_i}.attention.wk.weight": tmp_wk,
+            f"layers.{layer_i}.attention.wv.weight": tmp_wv,
+
+            f"layers.{layer_i}.attention.wo.weight": tmp_wo,
             f"layers.{layer_i}.attention.wo.bias": hf_model_state_dict[f"encoder.layers.{layer_i}.attn.proj.bias"],
 
             # ls1 ls2 qk_norm
-            f"layers.{layer_i}.attention.q_norm.weight": hf_model_state_dict[f"encoder.layers.{layer_i}.attn.q_norm.weight"],
-            f"layers.{layer_i}.attention.k_norm.weight": hf_model_state_dict[f"encoder.layers.{layer_i}.attn.k_norm.weight"],
+            f"layers.{layer_i}.attention.q_norm.weight": tmp_q_norm_w,
+            f"layers.{layer_i}.attention.k_norm.weight": tmp_k_norm_w,
             f"layers.{layer_i}.ls1": hf_model_state_dict[f"encoder.layers.{layer_i}.ls1"],
             f"layers.{layer_i}.ls2": hf_model_state_dict[f"encoder.layers.{layer_i}.ls2"],
 
@@ -133,10 +159,16 @@ def main():
         "--output_dir",
         help="Location to write PMX model",
     )
+    parser.add_argument(
+        "--pad_to_head",
+        help="num of heads to be padded",
+        type=int,
+    )
     args = parser.parse_args()
     write_pmx_model(
         model_path=args.output_dir,
         input_base_path=args.input_dir
+	pad_to_head=args.pad_to_head
     )
 
 if __name__ == "__main__":
