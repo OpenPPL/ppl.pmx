@@ -43,4 +43,7 @@ from .Pad import pad
 
 from .TensorParallelRMSNorm import tensor_parallel_rms_norm
 
+from .WoquColumnParallelLinear import woqu_column_parallel_linear
+from .WoquRowParallelLinear import woqu_row_parallel_linear
+
 from . import dynamic_batching
