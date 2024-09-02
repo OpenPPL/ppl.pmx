@@ -36,7 +36,7 @@ class TensorParallelRMSNorm(nn.Module):
         self.weight = torch.nn.Parameter(torch.ones(self.dim_per_partition))
 
     def forward(self, X: torch.Tensor):
-        return OPMX.tensor_parallel_rms_norm(X, self.weight, self.proc_group, -1, self.eps, self.embed_dim, self.scale, self.input_is_parallel)
+        return OPMX.tensor_parallel_rms_norm(X, self.weight, self.proc_group, -1, self.eps, self.scale, self.input_is_parallel)
 
 
 class InternVL_MLP(nn.Module):
@@ -101,24 +101,22 @@ class Attention(nn.Module):
 
         world_size = 1 if proc_group is None else proc_group.size()
 
-        self.num_kv_heads = args.num_kv_heads
-        self.num_local_heads = args.num_heads // world_size
+        self.num_kv_heads = args.padded_num_kv_heads
+        self.num_local_heads = args.padded_num_heads // world_size
         self.num_local_kv_heads = self.num_kv_heads // world_size
         self.num_local_kv_repeats = self.num_local_heads // self.num_local_kv_heads
-        #self.head_dim = args.hidden_dim // args.num_heads
-        self.head_dim = 128 # tmp fix for pad num_head=25
+        self.head_dim = args.head_dim
         self.num_layers = args.num_layers
         self.layer_id = layer_id
         self.fused_qkv = fused_qkv
 
         if self.fused_qkv:
             self.wqkv = ColumnParallelLinear(
-                proc_group, args.hidden_dim, args.num_heads * self.head_dim + 2 * self.num_kv_heads * self.head_dim,
-                #proc_group, args.hidden_dim, args.hidden_dim + 2 * self.num_kv_heads * self.head_dim,
+                proc_group, args.hidden_dim, args.padded_num_heads * self.head_dim + 2 * self.num_kv_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, gather_output=False)
         else:
             self.wq = ColumnParallelLinear(
-                proc_group, args.hidden_dim, args.hidden_dim,
+                proc_group, args.hidden_dim, args.padded_num_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, gather_output=False)
             self.wk = ColumnParallelLinear(
                 proc_group, args.hidden_dim, self.num_kv_heads * self.head_dim,
@@ -130,10 +128,8 @@ class Attention(nn.Module):
             proc_group, self.num_kv_heads * self.head_dim, args.hidden_dim,
             bias_term=attn_wo_bias_term, input_is_parallel=True)
 
-        #self.q_norm = RMSNorm(args.hidden_dim, eps=args.norm_eps)
-        #self.k_norm = RMSNorm(args.hidden_dim, eps=args.norm_eps)
-        self.q_norm = TensorParallelRMSNorm(proc_group, args.num_heads*self.head_dim, args.norm_eps, 25/26, True)
-        self.k_norm = TensorParallelRMSNorm(proc_group, self.num_kv_heads*self.head_dim, args.norm_eps, 25/26, True)
+        self.q_norm = TensorParallelRMSNorm(proc_group, args.padded_num_heads*self.head_dim, args.norm_eps, args.qk_norm_scale, True)
+        self.k_norm = TensorParallelRMSNorm(proc_group, self.num_kv_heads*self.head_dim, args.norm_eps, args.qk_norm_scale, True)
 
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor]):
@@ -255,17 +251,18 @@ class VitTransformer(nn.Module):
         self.fused_qkv = fused_qkv
 
         world_size = 1 if proc_group is None else proc_group.size()
-        num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
-        num_local_heads = params.num_heads // world_size
+        #num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
+        #num_local_heads = params.num_heads // world_size
+        #num_local_kv_heads = num_kv_heads // world_size
+        # fix for pad
+        num_kv_heads = params.padded_num_heads if params.padded_num_kv_heads is None else params.padded_num_kv_heads
+        num_local_heads = params.padded_num_heads // world_size
         num_local_kv_heads = num_kv_heads // world_size
-        #head_dim = params.hidden_dim // params.num_heads
-        head_dim = 128 # tmp fix for pad num_head=25
+        head_dim = params.head_dim
         self.local_q_dim = num_local_heads * head_dim
         self.local_kv_dim = num_local_kv_heads * head_dim
 
         self.vision_embeddings = VisionEmbeddings(params.hidden_dim, params.image_size, params.patch_size)
-        #self.pre_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
-        #self.post_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
 
         if self.with_proj_head:
             self.vision_projection = InternVL_MLP(params, linear_bias_term=True, proc_group=self.proc_group)
