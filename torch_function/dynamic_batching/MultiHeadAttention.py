@@ -10,7 +10,7 @@ class MultiHeadAttention(torch.autograd.Function):
                  max_seqlen: torch.Value, max_kvlen: torch.Value,
                  attn_mask: Optional[torch.Value],
                  num_heads: int, head_dim: int,
-                 is_causal: bool = True, is_alibi: bool = False, 
+                 is_causal: bool = True, is_alibi: bool = False,
                  num_kv_heads: int = 0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if attn_mask is not None:
@@ -42,7 +42,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 max_seqlen: torch.Tensor, max_kvlen: torch.Tensor,
                 attn_mask: Optional[torch.Tensor],
                 num_heads: int, head_dim: int,
-                is_causal: bool = True, is_alibi: bool = False, 
+                is_causal: bool = True, is_alibi: bool = False,
                 num_kv_heads: int = 0):
         if torch.onnx.is_in_onnx_export():
             return query
@@ -88,8 +88,8 @@ class MultiHeadAttention(torch.autograd.Function):
             else:
                 causal_mask = None
 
-            _query = __query[seqbeg:seqend].transpose(0, 1)
-            _key = __key[kvbeg:kvend].transpose(0, 1)
+            _query = __query[seqbeg:seqend].transpose(0, 1).float() # fix for qwen2-1.5b-instruct model
+            _key = __key[kvbeg:kvend].transpose(0, 1).float()
             _value = __value[kvbeg:kvend].transpose(0, 1)
             scores = torch.matmul(_query, _key.transpose(1, 2)) / torch.math.sqrt(head_dim)
             if causal_mask is not None:
@@ -104,8 +104,8 @@ class MultiHeadAttention(torch.autograd.Function):
                     None,
                     num_heads=num_heads,
                     data_type=_query.dtype).to(device=scores.device)[..., :kvlen]
-            
-            scores = torch.nn.functional.softmax(scores.float(), dim=-1).type_as(_query)
+
+            scores = torch.nn.functional.softmax(scores.float(), dim=-1).type_as(_value)
             output[seqbeg:seqend] = torch.matmul(scores, _value).transpose(0, 1).contiguous()
 
         return output
@@ -117,7 +117,7 @@ def multi_head_attention(
                 max_seqlen: torch.Tensor, max_kvlen: torch.Tensor,
                 attn_mask: Optional[torch.Tensor],
                 num_heads: int, head_dim: int,
-                is_causal: bool = True, is_alibi: bool = False, 
+                is_causal: bool = True, is_alibi: bool = False,
                 num_kv_heads: int = 0) -> torch.Tensor:
     return MultiHeadAttention.apply(query, key, value, seqstarts, kvstarts, decoding_batches,
                                     max_seqlen, max_kvlen, attn_mask,
