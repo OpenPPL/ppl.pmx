@@ -14,9 +14,61 @@ import torch_function as OPMX
 import clip_vit.modeling.Params as Params
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear
-from ModelLayers import Linear, RMSNorm, SkipRMSNorm
+from ModelLayers import Linear, RMSNorm, SkipRMSNorm, LayerNorm
+
 
 TensorDumper = ModelUtils.__TensorDumper__()
+
+
+class TensorParallelRMSNorm(nn.Module):
+    def __init__(self, proc_group: dist.ProcessGroup, dim: int, eps: float = 1e-5,
+                 scale: float = 1.0, input_is_parallel: bool = False) -> None:
+        super().__init__()
+        self.eps = eps
+        self.embed_dim = dim
+        self.scale = scale
+        self.input_is_parallel = input_is_parallel
+        self.proc_group = proc_group
+
+        world_size = 1 if proc_group is None else proc_group.size()
+        assert dim % world_size == 0, "{} is not divisible by {}".format(dim, world_size)
+        self.dim_per_partition = dim // world_size
+        self.weight = torch.nn.Parameter(torch.ones(self.dim_per_partition))
+
+    def forward(self, X: torch.Tensor):
+        return OPMX.tensor_parallel_rms_norm(X, self.weight, self.proc_group, -1, self.eps, self.scale, self.input_is_parallel)
+
+
+class InternVL_MLP(nn.Module):
+    def __init__(self,
+                 args: Params.ViTParams,
+                 linear_bias_term: bool,
+                 proc_group: dist.ProcessGroup):
+        super().__init__()
+
+        self.vit_hidden_dim = args.hidden_dim
+        self.llm_hidden_dim = args.llm_hidden_dim
+        self.downsample_ratio = args.downsample_ratio
+        self.h_w = args.image_size // args.patch_size
+        self.input_dim = self.vit_hidden_dim * self.downsample_ratio ** 2
+
+        self.layernorm = LayerNorm(self.input_dim, eps=args.norm_eps)
+        self.w1 = ColumnParallelLinear(proc_group, self.input_dim, self.llm_hidden_dim,
+                                       bias_term=linear_bias_term, gather_output=False)
+        self.w2 = RowParallelLinear(proc_group, self.llm_hidden_dim, self.llm_hidden_dim,
+                                    bias_term=linear_bias_term, input_is_parallel=True)
+
+    def forward(self, x):
+        #h = w = int(x.shape[1] ** 0.5)
+        # transform x to nhwc data layout
+        x = OPMX.reshape(x, (0, self.h_w, self.h_w, self.vit_hidden_dim))
+        x = OPMX.pixel_unshuffle(x, self.downsample_ratio, 'nhwc')
+        x = OPMX.reshape(x, (0, -1, self.input_dim))
+
+        x = self.w1(x)
+        x = OPMX.gelu(x, approximate=False)
+        output = self.w2(x)
+        return output
 
 
 class VisionEmbeddings(torch.nn.Module):
@@ -49,22 +101,22 @@ class Attention(nn.Module):
 
         world_size = 1 if proc_group is None else proc_group.size()
 
-        self.num_kv_heads = args.num_kv_heads
-        self.num_local_heads = args.num_heads // world_size
+        self.num_kv_heads = args.padded_num_kv_heads
+        self.num_local_heads = args.padded_num_heads // world_size
         self.num_local_kv_heads = self.num_kv_heads // world_size
         self.num_local_kv_repeats = self.num_local_heads // self.num_local_kv_heads
-        self.head_dim = args.hidden_dim // args.num_heads
+        self.head_dim = args.head_dim
         self.num_layers = args.num_layers
         self.layer_id = layer_id
         self.fused_qkv = fused_qkv
 
         if self.fused_qkv:
             self.wqkv = ColumnParallelLinear(
-                proc_group, args.hidden_dim, args.hidden_dim + 2 * self.num_kv_heads * self.head_dim,
+                proc_group, args.hidden_dim, args.padded_num_heads * self.head_dim + 2 * self.num_kv_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, gather_output=False)
         else:
             self.wq = ColumnParallelLinear(
-                proc_group, args.hidden_dim, args.hidden_dim,
+                proc_group, args.hidden_dim, args.padded_num_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, gather_output=False)
             self.wk = ColumnParallelLinear(
                 proc_group, args.hidden_dim, self.num_kv_heads * self.head_dim,
@@ -73,11 +125,11 @@ class Attention(nn.Module):
                 proc_group, args.hidden_dim, self.num_kv_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, gather_output=False)
         self.wo = RowParallelLinear(
-            proc_group, args.hidden_dim, args.hidden_dim,
+            proc_group, self.num_kv_heads * self.head_dim, args.hidden_dim,
             bias_term=attn_wo_bias_term, input_is_parallel=True)
 
-        self.q_norm = RMSNorm(args.hidden_dim, eps=args.norm_eps)
-        self.k_norm = RMSNorm(args.hidden_dim, eps=args.norm_eps)
+        self.q_norm = TensorParallelRMSNorm(proc_group, args.padded_num_heads*self.head_dim, args.norm_eps, args.qk_norm_scale, True)
+        self.k_norm = TensorParallelRMSNorm(proc_group, self.num_kv_heads*self.head_dim, args.norm_eps, args.qk_norm_scale, True)
 
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor]):
@@ -85,7 +137,6 @@ class Attention(nn.Module):
         if self.fused_qkv:
             xqkv = self.wqkv(x)
             # xqkv = OPMX.reshape(xqkv, expanded_shape)
-            # TensorDumper.dump(xqkv, "layer{}_reshaped_xqkv".format(self.layer_id))
             split_size = (self.num_local_heads * self.head_dim,
                           self.num_local_kv_heads * self.head_dim,
                           self.num_local_kv_heads * self.head_dim)
@@ -95,9 +146,6 @@ class Attention(nn.Module):
             #xq = OPMX.reshape(xq, expanded_shape)
             #xk = OPMX.reshape(xk, expanded_shape)
             #xv = OPMX.reshape(xv, expanded_shape)
-        # TensorDumper.dump(xq, "layer{}_reshaped_xq".format(self.layer_id))
-        # TensorDumper.dump(xk, "layer{}_reshaped_xk".format(self.layer_id))
-        # TensorDumper.dump(xv, "layer{}_reshaped_xv".format(self.layer_id))
 
         xq = self.q_norm(xq)
         xk = self.k_norm(xk)
@@ -115,7 +163,6 @@ class Attention(nn.Module):
         # TensorDumper.dump(attn, "layer{}_multi_head_attention_out".format(self.layer_id))
 
         output = self.wo(OPMX.reshape(attn, (0, 0, -1)))
-        # TensorDumper.dump(output, "layer{}_reshaped_wo_out".format(self.layer_id))
 
         return output
 
@@ -145,6 +192,7 @@ class FeedForward(nn.Module):
         # TensorDumper.dump(x1, "layer{}_ffn_w1".format(self.layer_id))
         output = self.w2(x1)
         # TensorDumper.dump(output, "layer{}_ffn_w2".format(self.layer_id))
+        #print ('ffn', output, output.shape)
         return output
 
 
@@ -203,21 +251,20 @@ class VitTransformer(nn.Module):
         self.fused_qkv = fused_qkv
 
         world_size = 1 if proc_group is None else proc_group.size()
-        num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
-        num_local_heads = params.num_heads // world_size
+        # fix for pad
+        num_kv_heads = params.padded_num_heads if params.padded_num_kv_heads is None else params.padded_num_kv_heads
+        num_local_heads = params.padded_num_heads // world_size
         num_local_kv_heads = num_kv_heads // world_size
-        head_dim = params.hidden_dim // params.num_heads
+        head_dim = params.head_dim
         self.local_q_dim = num_local_heads * head_dim
         self.local_kv_dim = num_local_kv_heads * head_dim
 
         self.vision_embeddings = VisionEmbeddings(params.hidden_dim, params.image_size, params.patch_size)
-        #self.pre_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
-        #self.post_layernorm = LayerNorm(params.hidden_dim, eps=params.norm_eps)
 
         if self.with_proj_head:
-            #self.vision_projection = Linear(params.hidden_dim, params.projection_dim, bias_term=False)
-            self.vision_projection = ColumnParallelLinear(proc_group, params.hidden_dim, params.hidden_dim,
-                                                          bias_term=False, gather_output=True)
+            self.vision_projection = InternVL_MLP(params, linear_bias_term=True, proc_group=self.proc_group) # for internvl vit
+            #self.vision_projection = ColumnParallelLinear(proc_group, params.hidden_dim, params.hidden_dim, bias_term=False, gather_output=True) # for intern vit
+
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.num_layers):
@@ -242,16 +289,18 @@ class VitTransformer(nn.Module):
         # TensorDumper.dump(h, "pre_layernorm_out")
 
         norm = None
-        for layer in self.layers:
+        #for layer in self.layers:
+        for idx, layer in enumerate(self.layers):
             h, norm = layer(h, norm, attn_mask)
 
-        output = (norm + h)[:, 0, :] # get cls token
+        # output = (norm + h)[:, 0, :] # get cls token
         # TensorDumper.dump(pooled_output, "pooled_output")
-        # output = self.post_layernorm(pooled_output)
-        # TensorDumper.dump(output, "post_layernorm_out")
+
         if self.with_proj_head:
-            output = self.vision_projection(output)
+            output = self.vision_projection((norm+h)[:, 1:, :])
             # TensorDumper.dump(output, "vision_proj_out")
+        else:
+            output = norm + h
         TensorDumper.dump(output, "logits")
         return output
 
@@ -262,7 +311,6 @@ class VitTransformer(nn.Module):
 
         for key, value in state_dict.items():
             module_name, param_name = key.rsplit(".", 1)
-
             if key in model_params:
                 self.get_submodule(module_name)._parameters[param_name][:] = value
                 loaded_params.add(key)

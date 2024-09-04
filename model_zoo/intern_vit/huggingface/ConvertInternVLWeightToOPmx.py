@@ -54,14 +54,17 @@ def write_pmx_model(model_path, input_base_path, pad_to_head):
     params = read_json((os.path.join(input_base_path, "config.json")))
 
     # vision_config
-    pmx_params_dict['hidden_dim'] = params['hidden_size']
-    pmx_params_dict['num_heads'] = params['num_attention_heads']
-    pmx_params_dict['num_layers'] = params['num_hidden_layers']
-    pmx_params_dict['norm_eps'] = params['layer_norm_eps']
-    pmx_params_dict['image_size'] = params['image_size']
-    pmx_params_dict['patch_size'] = params['patch_size']
+    pmx_params_dict['hidden_dim'] = params['vision_config']['hidden_size']
+    pmx_params_dict['num_heads'] = params['vision_config']['num_attention_heads']
+    pmx_params_dict['num_layers'] = params['vision_config']['num_hidden_layers']
+    pmx_params_dict['norm_eps'] = params['vision_config']['layer_norm_eps']
+    pmx_params_dict['image_size'] = params['vision_config']['image_size']
+    pmx_params_dict['patch_size'] = params['vision_config']['patch_size']
     #pmx_params_dict['projection_dim'] = params['vision_config']['projection_dim']
-    pmx_params_dict['num_kv_heads'] = params.get('num_key_value_heads', params['num_attention_heads'])
+    pmx_params_dict['num_kv_heads'] = params['vision_config'].get('num_key_value_heads', params['vision_config']['num_attention_heads'])
+
+    pmx_params_dict['llm_hidden_dim'] = params['llm_config']['hidden_size']
+    pmx_params_dict['downsample_ratio'] = int(1 / params["downsample_ratio"])
 
     # TO DO: GQA / MQA, only test on llama
     num_heads = pmx_params_dict['num_heads']
@@ -76,19 +79,17 @@ def write_pmx_model(model_path, input_base_path, pad_to_head):
     pmx_params_dict['head_dim'] = dims_per_head
 
     # compute intermediate_size
-    pmx_params_dict['intermediate_dim'] = params.get('intermediate_size')
+    pmx_params_dict['intermediate_dim'] = params['vision_config']['intermediate_size']
     write_json(pmx_params_dict, os.path.join(model_path, "opmx_params.json"))
 
     hf_model_state_dict, state_dict = {}, {}
-    for ckpt_path in sorted(Path(input_base_path).glob("*.safetensors")):
-        weights = safe_open(ckpt_path, 'pt', 'cpu')
-        weights = {k: weights.get_tensor(k) for k in weights.keys()}
-        hf_model_state_dict.update(weights)
+    for ckpt_path in sorted(Path(input_base_path).glob("*.pth")):
+        hf_model_state_dict.update(torch.load(ckpt_path, map_location="cpu"))
 
     for layer_i in range(pmx_params_dict['num_layers']):
 
         split_dim = [head * dims_per_head for head in [num_heads, num_kv_heads, num_kv_heads]]
-        wq, wk, wv = hf_model_state_dict[f"encoder.layers.{layer_i}.attn.qkv.weight"].split(split_dim, dim=0)
+        wq, wk, wv = hf_model_state_dict[f"vit.encoder.layers.{layer_i}.attn.qkv.weight"].split(split_dim, dim=0)
 
         tmp_wq = torch.zeros(size=[ pmx_params_dict['padded_num_heads'] * dims_per_head, wq.shape[1]], dtype=wq.dtype)
         tmp_wk = torch.zeros(size=[ pmx_params_dict['padded_num_kv_heads'] * dims_per_head, wk.shape[1]], dtype=wk.dtype)
@@ -99,11 +100,11 @@ def write_pmx_model(model_path, input_base_path, pad_to_head):
 
         tmp_wo = torch.zeros(size=[wq.shape[0], pmx_params_dict['padded_num_heads'] * dims_per_head], dtype=wq.dtype)
         #tmp_wo_bias = torch.zeros(size=[(num_heads+1) * dims_per_head], dtype=wq.dtype)
-        tmp_wo[:, :wq.shape[1]] = hf_model_state_dict[f"encoder.layers.{layer_i}.attn.proj.weight"]
+        tmp_wo[:, :wq.shape[1]] = hf_model_state_dict[f"vit.encoder.layers.{layer_i}.attn.proj.weight"]
 
 
-        q_norm_w = hf_model_state_dict[f"encoder.layers.{layer_i}.attn.q_norm.weight"]
-        k_norm_w = hf_model_state_dict[f"encoder.layers.{layer_i}.attn.k_norm.weight"]
+        q_norm_w = hf_model_state_dict[f"vit.encoder.layers.{layer_i}.attn.q_norm.weight"]
+        k_norm_w = hf_model_state_dict[f"vit.encoder.layers.{layer_i}.attn.k_norm.weight"]
         tmp_q_norm_w = torch.zeros(size=[ pmx_params_dict['padded_num_heads'] * dims_per_head], dtype=wq.dtype)
         tmp_k_norm_w = torch.zeros(size=[ pmx_params_dict['padded_num_kv_heads'] * dims_per_head], dtype=wq.dtype)
 
@@ -115,32 +116,40 @@ def write_pmx_model(model_path, input_base_path, pad_to_head):
             f"layers.{layer_i}.attention.wk.weight": tmp_wk,
             f"layers.{layer_i}.attention.wv.weight": tmp_wv,
 
+            #f"layers.{layer_i}.attention.wo.weight": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.attn.proj.weight"],
             f"layers.{layer_i}.attention.wo.weight": tmp_wo,
-            f"layers.{layer_i}.attention.wo.bias": hf_model_state_dict[f"encoder.layers.{layer_i}.attn.proj.bias"],
+            f"layers.{layer_i}.attention.wo.bias": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.attn.proj.bias"],
 
             # ls1 ls2 qk_norm
-            f"layers.{layer_i}.attention.q_norm.weight": tmp_q_norm_w,
-            f"layers.{layer_i}.attention.k_norm.weight": tmp_k_norm_w,
-            f"layers.{layer_i}.ls1": hf_model_state_dict[f"encoder.layers.{layer_i}.ls1"],
-            f"layers.{layer_i}.ls2": hf_model_state_dict[f"encoder.layers.{layer_i}.ls2"],
+            f"layers.{layer_i}.attention.q_norm.weight": tmp_q_norm_w, #hf_model_state_dict[f"vit.encoder.layers.{layer_i}.attn.q_norm.weight"],
+            f"layers.{layer_i}.attention.k_norm.weight": tmp_k_norm_w, #hf_model_state_dict[f"vit.encoder.layers.{layer_i}.attn.k_norm.weight"],
+            f"layers.{layer_i}.ls1": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.ls1"],
+            f"layers.{layer_i}.ls2": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.ls2"],
 
-            f"layers.{layer_i}.feed_forward.w1.weight": hf_model_state_dict[f"encoder.layers.{layer_i}.mlp.fc1.weight"],
-            f"layers.{layer_i}.feed_forward.w1.bias": hf_model_state_dict[f"encoder.layers.{layer_i}.mlp.fc1.bias"],
-            f"layers.{layer_i}.feed_forward.w2.weight": hf_model_state_dict[f"encoder.layers.{layer_i}.mlp.fc2.weight"],
-            f"layers.{layer_i}.feed_forward.w2.bias": hf_model_state_dict[f"encoder.layers.{layer_i}.mlp.fc2.bias"],
+            f"layers.{layer_i}.feed_forward.w1.weight": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.mlp.fc1.weight"],
+            f"layers.{layer_i}.feed_forward.w1.bias": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.mlp.fc1.bias"],
+            f"layers.{layer_i}.feed_forward.w2.weight": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.mlp.fc2.weight"],
+            f"layers.{layer_i}.feed_forward.w2.bias": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.mlp.fc2.bias"],
 
-            f"layers.{layer_i}.attention_norm.weight": hf_model_state_dict[f"encoder.layers.{layer_i}.norm1.weight"],
+            f"layers.{layer_i}.attention_norm.weight": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.norm1.weight"],
             #f"layers.{layer_i}.attention_norm.bias": hf_model_state_dict[f"vision_model.encoder.layers.{layer_i}.layer_norm1.bias"],
 
-            f"layers.{layer_i}.ffn_norm.weight": hf_model_state_dict[f"encoder.layers.{layer_i}.norm2.weight"],
+            f"layers.{layer_i}.ffn_norm.weight": hf_model_state_dict[f"vit.encoder.layers.{layer_i}.norm2.weight"],
             #f"layers.{layer_i}.ffn_norm.bias": hf_model_state_dict[f"vision_model.encoder.layers.{layer_i}.layer_norm2.bias"],
         })
 
+    # 'mlp1.0.bias', 'mlp1.0.weight', 'mlp1.1.bias', 'mlp1.1.weight', 'mlp1.3.bias', 'mlp1.3.weight'
     state_dict.update({
-        "vision_embeddings.cls_emb_weight": hf_model_state_dict["embeddings.class_embedding"],
-        "vision_embeddings.patch_emb_weight": hf_model_state_dict["embeddings.patch_embedding.weight"],
-        "vision_embeddings.patch_emb_bias": hf_model_state_dict["embeddings.patch_embedding.bias"],
-        "vision_embeddings.pos_emb_weight": hf_model_state_dict["embeddings.position_embedding"],
+        "vision_embeddings.cls_emb_weight": hf_model_state_dict["vit.embeddings.class_embedding"],
+        "vision_embeddings.patch_emb_weight": hf_model_state_dict["vit.embeddings.patch_embedding.weight"],
+        "vision_embeddings.patch_emb_bias": hf_model_state_dict["vit.embeddings.patch_embedding.bias"],
+        "vision_embeddings.pos_emb_weight": hf_model_state_dict["vit.embeddings.position_embedding"],
+        "vision_projection.layernorm.weight": hf_model_state_dict["mlp1.0.weight"],
+        "vision_projection.layernorm.bias": hf_model_state_dict["mlp1.0.bias"],
+        "vision_projection.w1.weight": hf_model_state_dict["mlp1.1.weight"],
+        "vision_projection.w1.bias": hf_model_state_dict["mlp1.1.bias"],
+        "vision_projection.w2.weight": hf_model_state_dict["mlp1.3.weight"],
+        "vision_projection.w2.bias": hf_model_state_dict["mlp1.3.bias"],
     })
 
     if "visual_projection.weight" in hf_model_state_dict.keys():
@@ -165,10 +174,11 @@ def main():
         type=int,
     )
     args = parser.parse_args()
+
     write_pmx_model(
         model_path=args.output_dir,
-        input_base_path=args.input_dir
-	pad_to_head=args.pad_to_head
+        input_base_path=args.input_dir,
+        pad_to_head=args.pad_to_head,
     )
 
 if __name__ == "__main__":
