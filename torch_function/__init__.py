@@ -22,6 +22,7 @@ from .MultiHeadAttention import multi_head_attention
 from .MultiHeadCacheAttention import multi_head_cache_attention
 
 from .ParallelEmbedding import parallel_embedding
+from .PixelUnshuffle import pixel_unshuffle
 
 from .Reshape import reshape
 
@@ -39,5 +40,10 @@ from .Swish import swish
 
 from .GroupNorm import group_norm
 from .Pad import pad
+
+from .TensorParallelRMSNorm import tensor_parallel_rms_norm
+
+from .WoquColumnParallelLinear import woqu_column_parallel_linear
+from .WoquRowParallelLinear import woqu_row_parallel_linear
 
 from . import dynamic_batching
