@@ -84,7 +84,10 @@ class KeyValueCache(torch.autograd.Function):
 
         _, num_head, head_dim = current_key.shape
         key = torch.zeros(kvstarts[-1], num_head, head_dim, dtype=current_key.dtype, device=current_key.device)
-        value = torch.zeros(kvstarts[-1], num_head, head_dim, dtype=current_value.dtype, device=current_value.device)
+        if current_value is not None:
+            value = torch.zeros(kvstarts[-1], num_head, head_dim, dtype=current_value.dtype, device=current_value.device)
+        else:
+            value = torch.empty(0)
 
         seqlens = seqstarts[1:] - seqstarts[:-1]
         for b, seqlen in enumerate(seqlens):
@@ -117,22 +120,24 @@ class KeyValueCache(torch.autograd.Function):
                     cache[storebeg:storeend, layer_idx, 0], \
                     scale[storebeg:storeend, layer_idx, 0] =  \
                         quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[storebeg:storeend, layer_idx, 1], \
-                    scale[storebeg:storeend, layer_idx, 1] =  \
-                        quant(current_value[seqbeg:seqend], quant_bit, quant_group)
                     key[kvbeg:kvend] = dequant(
                         cache[loadbeg:loadend, layer_idx, 0],
                         scale[loadbeg:loadend, layer_idx, 0],
                         quant_bit, quant_group)
-                    value[kvbeg:kvend] = dequant(
-                        cache[loadbeg:loadend, layer_idx, 1],
-                        scale[loadbeg:loadend, layer_idx, 1],
-                        quant_bit, quant_group)
+                    if current_value is not None:
+                        cache[storebeg:storeend, layer_idx, 1], \
+                        scale[storebeg:storeend, layer_idx, 1] =  \
+                            quant(current_value[seqbeg:seqend], quant_bit, quant_group)
+                        value[kvbeg:kvend] = dequant(
+                            cache[loadbeg:loadend, layer_idx, 1],
+                            scale[loadbeg:loadend, layer_idx, 1],
+                            quant_bit, quant_group)
                 else:
                     cache[storebeg:storeend, layer_idx, 0] = current_key[seqbeg:seqend]
-                    cache[storebeg:storeend, layer_idx, 1] = current_value[seqbeg:seqend]
                     key[kvbeg:kvend] = cache[loadbeg:loadend, layer_idx, 0]
-                    value[kvbeg:kvend] = cache[loadbeg:loadend, layer_idx, 1]
+                    if current_value is not None:
+                        cache[storebeg:storeend, layer_idx, 1] = current_value[seqbeg:seqend]
+                        value[kvbeg:kvend] = cache[loadbeg:loadend, layer_idx, 1]
 
 
             def process_mode_0_layout_1():
@@ -140,22 +145,24 @@ class KeyValueCache(torch.autograd.Function):
                     cache[layer_idx, storebeg:storeend, 0], \
                     scale[layer_idx, storebeg:storeend, 0] =  \
                         quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, storebeg:storeend, 1], \
-                    scale[layer_idx, storebeg:storeend, 1] =  \
-                        quant(current_value[seqbeg:seqend], quant_bit, quant_group)
                     key[kvbeg:kvend] = dequant(
                         cache[layer_idx, loadbeg:loadend, 0],
                         scale[layer_idx, loadbeg:loadend, 0],
                         quant_bit, quant_group)
-                    value[kvbeg:kvend] = dequant(
-                        cache[layer_idx, loadbeg:loadend, 1],
-                        scale[layer_idx, loadbeg:loadend, 1],
-                        quant_bit, quant_group)
+                    if current_value is not None:
+                        cache[layer_idx, storebeg:storeend, 1], \
+                        scale[layer_idx, storebeg:storeend, 1] =  \
+                            quant(current_value[seqbeg:seqend], quant_bit, quant_group)
+                        value[kvbeg:kvend] = dequant(
+                            cache[layer_idx, loadbeg:loadend, 1],
+                            scale[layer_idx, loadbeg:loadend, 1],
+                            quant_bit, quant_group)
                 else:
                     cache[layer_idx, storebeg:storeend, 0] = current_key[seqbeg:seqend]
-                    cache[layer_idx, storebeg:storeend, 1] = current_value[seqbeg:seqend]
                     key[kvbeg:kvend] = cache[layer_idx, loadbeg:loadend, 0]
-                    value[kvbeg:kvend] = cache[layer_idx, loadbeg:loadend, 1]
+                    if current_value is not None:
+                        cache[layer_idx, storebeg:storeend, 1] = current_value[seqbeg:seqend]
+                        value[kvbeg:kvend] = cache[layer_idx, loadbeg:loadend, 1]
 
 
             def process_mode_0_layout_2():
@@ -163,22 +170,24 @@ class KeyValueCache(torch.autograd.Function):
                     cache[layer_idx, 0, storebeg:storeend], \
                     scale[layer_idx, 0, storebeg:storeend] =  \
                         quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, 1, storebeg:storeend], \
-                    scale[layer_idx, 1, storebeg:storeend] =  \
-                        quant(current_value[seqbeg:seqend], quant_bit, quant_group)
                     key[kvbeg:kvend] = dequant(
                         cache[layer_idx, 0, loadbeg:loadend],
                         scale[layer_idx, 0, loadbeg:loadend],
                         quant_bit, quant_group)
-                    value[kvbeg:kvend] = dequant(
-                        cache[layer_idx, 1, loadbeg:loadend],
-                        scale[layer_idx, 1, loadbeg:loadend],
-                        quant_bit, quant_group)
+                    if current_value is not None:
+                        cache[layer_idx, 1, storebeg:storeend], \
+                        scale[layer_idx, 1, storebeg:storeend] =  \
+                            quant(current_value[seqbeg:seqend], quant_bit, quant_group)
+                        value[kvbeg:kvend] = dequant(
+                            cache[layer_idx, 1, loadbeg:loadend],
+                            scale[layer_idx, 1, loadbeg:loadend],
+                            quant_bit, quant_group)
                 else:
                     cache[layer_idx, 0, storebeg:storeend] = current_key[seqbeg:seqend]
-                    cache[layer_idx, 1, storebeg:storeend] = current_value[seqbeg:seqend]
                     key[kvbeg:kvend] = cache[layer_idx, 0, loadbeg:loadend]
-                    value[kvbeg:kvend] = cache[layer_idx, 1, loadbeg:loadend]
+                    if current_value is not None:
+                        cache[layer_idx, 1, storebeg:storeend] = current_value[seqbeg:seqend]
+                        value[kvbeg:kvend] = cache[layer_idx, 1, loadbeg:loadend]
 
 
             def process_mode_0_layout_3():
@@ -187,23 +196,25 @@ class KeyValueCache(torch.autograd.Function):
                     cache[layer_idx, 0, :, storebeg:storeend], \
                     scale[layer_idx, 0, :, storebeg:storeend] =  \
                         c.transpose(-3, -2), s.transpose(-3, -2)
-                    c, s = quant(current_value[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, 1, :, storebeg:storeend], \
-                    scale[layer_idx, 1, :, storebeg:storeend] =  \
-                        c.transpose(-3, -2), s.transpose(-3, -2)
                     key[kvbeg:kvend] = dequant(
                         cache[layer_idx, 0, :, loadbeg:loadend],
                         scale[layer_idx, 0, :, loadbeg:loadend],
                         quant_bit, quant_group).transpose(-3, -2)
-                    value[kvbeg:kvend] = dequant(
-                        cache[layer_idx, 1, :, loadbeg:loadend],
-                        scale[layer_idx, 1, :, loadbeg:loadend],
-                        quant_bit, quant_group).transpose(-3, -2)
+                    if current_value is not None:
+                        c, s = quant(current_value[seqbeg:seqend], quant_bit, quant_group)
+                        cache[layer_idx, 1, :, storebeg:storeend], \
+                        scale[layer_idx, 1, :, storebeg:storeend] =  \
+                            c.transpose(-3, -2), s.transpose(-3, -2)
+                        value[kvbeg:kvend] = dequant(
+                            cache[layer_idx, 1, :, loadbeg:loadend],
+                            scale[layer_idx, 1, :, loadbeg:loadend],
+                            quant_bit, quant_group).transpose(-3, -2)
                 else:
                     cache[layer_idx, 0, :, storebeg:storeend] = current_key[seqbeg:seqend].transpose(-3, -2)
-                    cache[layer_idx, 1, :, storebeg:storeend] = current_value[seqbeg:seqend].transpose(-3, -2)
                     key[kvbeg:kvend] = cache[layer_idx, 0, :, loadbeg:loadend].transpose(-3, -2)
-                    value[kvbeg:kvend] = cache[layer_idx, 1, :, loadbeg:loadend].transpose(-3, -2)
+                    if current_value is not None:
+                        cache[layer_idx, 1, :, storebeg:storeend] = current_value[seqbeg:seqend].transpose(-3, -2)
+                        value[kvbeg:kvend] = cache[layer_idx, 1, :, loadbeg:loadend].transpose(-3, -2)
 
 
             def process_mode_1_layout_0():
@@ -211,22 +222,24 @@ class KeyValueCache(torch.autograd.Function):
                     cache[storeidx, layer_idx, 0], \
                     scale[storeidx, layer_idx, 0] =  \
                         quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[storeidx, layer_idx, 1], \
-                    scale[storeidx, layer_idx, 1] =  \
-                        quant(current_value[seqbeg:seqend], quant_bit, quant_group)
                     key[kvbeg:kvend] = dequant(
                         cache[loadidx, layer_idx, 0],
                         scale[loadidx, layer_idx, 0],
                         quant_bit, quant_group)
-                    value[kvbeg:kvend] = dequant(
-                        cache[loadidx, layer_idx, 1],
-                        scale[loadidx, layer_idx, 1],
-                        quant_bit, quant_group)
+                    if current_value is not None:
+                        cache[storeidx, layer_idx, 1], \
+                        scale[storeidx, layer_idx, 1] =  \
+                            quant(current_value[seqbeg:seqend], quant_bit, quant_group)
+                        value[kvbeg:kvend] = dequant(
+                            cache[loadidx, layer_idx, 1],
+                            scale[loadidx, layer_idx, 1],
+                            quant_bit, quant_group)
                 else:
                     cache[storeidx, layer_idx, 0] = current_key[seqbeg:seqend]
-                    cache[storeidx, layer_idx, 1] = current_value[seqbeg:seqend]
                     key[kvbeg:kvend] = cache[loadidx, layer_idx, 0]
-                    value[kvbeg:kvend] = cache[loadidx, layer_idx, 1]
+                    if current_value is not None:
+                        cache[storeidx, layer_idx, 1] = current_value[seqbeg:seqend]
+                        value[kvbeg:kvend] = cache[loadidx, layer_idx, 1]
 
 
             def process_mode_1_layout_1():
@@ -234,22 +247,24 @@ class KeyValueCache(torch.autograd.Function):
                     cache[layer_idx, storeidx, 0], \
                     scale[layer_idx, storeidx, 0] =  \
                         quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, storeidx, 1], \
-                    scale[layer_idx, storeidx, 1] =  \
-                        quant(current_value[seqbeg:seqend], quant_bit, quant_group)
                     key[kvbeg:kvend] = dequant(
                         cache[layer_idx, loadidx, 0],
                         scale[layer_idx, loadidx, 0],
                         quant_bit, quant_group)
-                    value[kvbeg:kvend] = dequant(
-                        cache[layer_idx, loadidx, 1],
-                        scale[layer_idx, loadidx, 1],
-                        quant_bit, quant_group)
+                    if current_value is not None:
+                        cache[layer_idx, storeidx, 1], \
+                        scale[layer_idx, storeidx, 1] =  \
+                            quant(current_value[seqbeg:seqend], quant_bit, quant_group)
+                        value[kvbeg:kvend] = dequant(
+                            cache[layer_idx, loadidx, 1],
+                            scale[layer_idx, loadidx, 1],
+                            quant_bit, quant_group)
                 else:
                     cache[layer_idx, storeidx, 0] = current_key[seqbeg:seqend]
-                    cache[layer_idx, storeidx, 1] = current_value[seqbeg:seqend]
                     key[kvbeg:kvend] = cache[layer_idx, loadidx, 0]
-                    value[kvbeg:kvend] = cache[layer_idx, loadidx, 1]
+                    if current_value is not None:
+                        cache[layer_idx, storeidx, 1] = current_value[seqbeg:seqend]
+                        value[kvbeg:kvend] = cache[layer_idx, loadidx, 1]
 
 
             def process_mode_1_layout_2():
@@ -257,22 +272,24 @@ class KeyValueCache(torch.autograd.Function):
                     cache[layer_idx, 0, storeidx], \
                     scale[layer_idx, 0, storeidx] =  \
                         quant(current_key[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, 1, storeidx], \
-                    scale[layer_idx, 1, storeidx] =  \
-                        quant(current_value[seqbeg:seqend], quant_bit, quant_group)
                     key[kvbeg:kvend] = dequant(
                         cache[layer_idx, 0, loadidx],
                         scale[layer_idx, 0, loadidx],
                         quant_bit, quant_group)
-                    value[kvbeg:kvend] = dequant(
-                        cache[layer_idx, 1, loadidx],
-                        scale[layer_idx, 1, loadidx],
-                        quant_bit, quant_group)
+                    if current_value is not None:
+                        cache[layer_idx, 1, storeidx], \
+                        scale[layer_idx, 1, storeidx] =  \
+                            quant(current_value[seqbeg:seqend], quant_bit, quant_group)
+                        value[kvbeg:kvend] = dequant(
+                            cache[layer_idx, 1, loadidx],
+                            scale[layer_idx, 1, loadidx],
+                            quant_bit, quant_group)
                 else:
                     cache[layer_idx, 0, storeidx] = current_key[seqbeg:seqend]
-                    cache[layer_idx, 1, storeidx] = current_value[seqbeg:seqend]
                     key[kvbeg:kvend] = cache[layer_idx, 0, loadidx]
-                    value[kvbeg:kvend] = cache[layer_idx, 1, loadidx]
+                    if current_value is not None:
+                        cache[layer_idx, 1, storeidx] = current_value[seqbeg:seqend]
+                        value[kvbeg:kvend] = cache[layer_idx, 1, loadidx]
 
 
             def process_mode_1_layout_3():
@@ -281,23 +298,25 @@ class KeyValueCache(torch.autograd.Function):
                     cache[layer_idx, 0, :, storeidx], \
                     scale[layer_idx, 0, :, storeidx] =  \
                         c.transpose(-3, -2), s.transpose(-3, -2)
-                    c, s = quant(current_value[seqbeg:seqend], quant_bit, quant_group)
-                    cache[layer_idx, 1, :, storeidx], \
-                    scale[layer_idx, 1, :, storeidx] =  \
-                        c.transpose(-3, -2), s.transpose(-3, -2)
                     key[kvbeg:kvend] = dequant(
                         cache[layer_idx, 0, :, loadidx],
                         scale[layer_idx, 0, :, loadidx],
                         quant_bit, quant_group).transpose(-3, -2)
-                    value[kvbeg:kvend] = dequant(
+                    if current_value is not None:
+                        c, s = quant(current_value[seqbeg:seqend], quant_bit, quant_group)
+                        cache[layer_idx, 1, :, storeidx], \
+                        scale[layer_idx, 1, :, storeidx] =  \
+                            c.transpose(-3, -2), s.transpose(-3, -2)
+                        value[kvbeg:kvend] = dequant(
                         cache[layer_idx, 1, :, loadidx],
                         scale[layer_idx, 1, :, loadidx],
                         quant_bit, quant_group).transpose(-3, -2)
                 else:
                     cache[layer_idx, 0, :, storeidx] = current_key[seqbeg:seqend].transpose(-3, -2)
-                    cache[layer_idx, 1, :, storeidx] = current_value[seqbeg:seqend].transpose(-3, -2)
                     key[kvbeg:kvend] = cache[layer_idx, 0, :, loadidx].transpose(-3, -2)
-                    value[kvbeg:kvend] = cache[layer_idx, 1, :, loadidx].transpose(-3, -2)
+                    if current_value is not None:
+                        cache[layer_idx, 1, :, storeidx] = current_value[seqbeg:seqend].transpose(-3, -2)
+                        value[kvbeg:kvend] = cache[layer_idx, 1, :, loadidx].transpose(-3, -2)
 
 
             if cache_mode == 0:
@@ -325,8 +344,11 @@ class KeyValueCache(torch.autograd.Function):
             else:
                 raise Exception("invalid cache_mode: {}".format(cache_mode))
         if num_repeat > 1:
-            return key[:, :, None, :].expand(kvstarts[-1], num_head, num_repeat, head_dim).reshape(kvstarts[-1], num_head * num_repeat, head_dim), \
-                value[:, :, None, :].expand(kvstarts[-1], num_head, num_repeat, head_dim).reshape(kvstarts[-1], num_head * num_repeat, head_dim)
+            if current_value is not None:
+                return key[:, :, None, :].expand(kvstarts[-1], num_head, num_repeat, head_dim).reshape(kvstarts[-1], num_head * num_repeat, head_dim), \
+                    value[:, :, None, :].expand(kvstarts[-1], num_head, num_repeat, head_dim).reshape(kvstarts[-1], num_head * num_repeat, head_dim)
+            else:
+                return key[:, :, None, :].expand(kvstarts[-1], num_head, num_repeat, head_dim).reshape(kvstarts[-1], num_head * num_repeat, head_dim), value
         else:
             return key, value
 

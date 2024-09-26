@@ -63,7 +63,8 @@ class MultiHeadAttention(torch.autograd.Function):
             __key = torch.repeat_interleave(__key, dim=-2, repeats=num_rep)
             __value = torch.repeat_interleave(__value, dim=-2, repeats=num_rep)
 
-        output = torch.zeros_like(__query)
+        bxs, vo_head_dim = __query.shape[0], __value.shape[-1]
+        output = torch.zeros((bxs, num_heads, vo_head_dim), dtype=__query.dtype, device=__query.device)
 
         if is_alibi:
             if __name__ == "__main__":

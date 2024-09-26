@@ -27,7 +27,7 @@ class MoeReduce(torch.autograd.Function):
 
 
 def moe_reduce(Y: torch.Tensor, expert_weights: torch.Tensor,
-               invert_permutation: torch.Tensor, num_experts_per_token: int):
+               invert_permutation: torch.Tensor, num_experts_per_token: int) -> torch.Tensor:
 
     return MoeReduce.apply(Y, expert_weights, invert_permutation, num_experts_per_token)
 
