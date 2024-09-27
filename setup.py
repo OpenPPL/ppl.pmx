@@ -7,7 +7,7 @@ with open("requirements.txt", "r", encoding="utf-8") as f:
     requirements = f.read().splitlines()
 
 setup(
-    name="opmx",
+    name="ppl.pmx",
     version="0.1.0",
     author="OpenPPL",
     description="Open PPL Model Exchange (OPMX) - An open ecosystem for AI model exchange",

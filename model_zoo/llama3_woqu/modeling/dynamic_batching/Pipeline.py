@@ -177,6 +177,8 @@ class LLaMA(__TextGenerator__):
             max_kvlen = torch.tensor([max(kvlens)], dtype=torch.int64)
             decoding_batches = torch.tensor([decoding_batches], dtype=torch.int64)
 
+            print(token_ids, attn_mask, seqstarts, kvstarts, cachestarts, decoding_batches,
+                    start_pos, max_seqlen, max_kvlen)
             logits = self.model.forward(token_ids, attn_mask, seqstarts, kvstarts,
                                         cachestarts, decoding_batches, start_pos,
                                         max_seqlen, max_kvlen, kv_cache, kv_scale)
