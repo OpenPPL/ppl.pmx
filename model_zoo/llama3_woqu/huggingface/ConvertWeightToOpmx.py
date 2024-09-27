@@ -55,6 +55,17 @@ def write_json(text, path):
         json.dump(text, f)
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def write_pmx_model(model_path, input_base_path, model_type, quant, group_size, n_bits, has_zeropoint, storage_bits):
     os.makedirs(model_path, exist_ok=True)
     print ("Loading the checkpoint in a HF model")
@@ -272,9 +283,10 @@ def main():
         help="Input model type",
     )
     parser.add_argument(
-    "--quant",
-    default=False,
-    help="Enable quantization for the model. Set to True to quantize the model weights.",
+        "--quant",
+        type=str2bool,
+        default=False,
+        help="Enable quantization for the model. Set to True to quantize the model weights.",
     )
     parser.add_argument(
         "--group_size",
@@ -288,7 +300,8 @@ def main():
     )
     parser.add_argument(
         "--has_zeropoint",
-        default=False,
+        type=str2bool,
+        default=True,
         help="Include zero-point in quantization. Set to True to use zero-point quantization.",
     )
     parser.add_argument(

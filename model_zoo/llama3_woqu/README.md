@@ -46,6 +46,16 @@ OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu huggingface/Demo.py --ckpt_
 - `OMP_NUM_THREADS`: This parameter determines the number of OpenMP threads. It is set to 1 to prevent excessive CPU core usage. Each PyTorch process opens an OpenMP thread pool, and setting it to 1 avoids occupying too many CPU cores.
 - `--nproc_per_node`: Specifies the number of model slices per node.
 
+## Eval Model
+The `Eval.py` provides ppl test for llama3 model.
+
+```bash
+OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu huggingface/Eval.py --ckpt_dir <convert_dir> --tokenizer_path <llama_tokenizer_dir> --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 --quantized_cache 1 --dynamic_batching 1 --quant_data_type "int4" --quant_method "weight_only" --quant_axis 1 --group_size 128 --storage_bits 32
+```
+
+- `OMP_NUM_THREADS`: This parameter determines the number of OpenMP threads. It is set to 1 to prevent excessive CPU core usage. Each PyTorch process opens an OpenMP thread pool, and setting it to 1 avoids occupying too many CPU cores.
+- `--nproc_per_node`: Specifies the number of model slices per node.
+
 ## Exporting Model
 
 To export a model, you will use the `Export.py` script provided. Here's an example command for exporting a 13B model with 1 GPU:

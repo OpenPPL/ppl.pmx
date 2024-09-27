@@ -342,6 +342,44 @@ class Transformer(nn.Module):
         TensorDumper.dump(output, "logits")
         return output
 
+
+    @torch.inference_mode()
+    def logit_forward(self, tokens: torch.Tensor, attn_mask: Optional[torch.Tensor],
+                      start_pos: torch.Tensor, kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
+        h = self.tok_embeddings(tokens)
+        # TensorDumper.dump(h, "emb_out")
+
+        _kv_scale = kv_scale
+        TensorDumper.dump(tokens, "token_ids")
+        if attn_mask is not None:
+            TensorDumper.dump(attn_mask, "attn_mask")
+        if self.fused_kvcache and attn_mask is not None:
+            if kv_scale is None: # mount an empty scale for friendly exporting
+                _kv_scale = torch.empty(0, dtype=h.dtype)
+        TensorDumper.dump(start_pos, "start_pos")
+        TensorDumper.dump(kv_cache, "kv_cache")
+        if kv_scale is not None:
+            TensorDumper.dump(kv_scale, "kv_scale")
+
+        if self.with_alibi and not self.fused_alibi:
+            attn_mask = OPMX.alibi_mask(
+                torch.tensor(tokens.shape[1], dtype=torch.int64),
+                torch.tensor(tokens.shape[1], dtype=torch.int64) + start_pos, attn_mask, self.params.num_heads, h.dtype)
+            # TensorDumper.dump(attn_mask, "alibi_mask")
+
+        norm = None
+        for layer in self.layers:
+            h, norm = layer(h, norm, attn_mask, start_pos, kv_cache, _kv_scale)
+
+        h, norm = self.norm(h, norm)
+        # TensorDumper.dump(h, "last_rms_norm")
+        output = self.output(h)  # only compute last logits
+        # TensorDumper.dump(output, "logits_before_cast")
+        output = output.float()
+        TensorDumper.dump(output, "logits")
+        return output
+
+
     @torch.no_grad()
     def load_state_dict(self, state_dict: Mapping[str, Any]):
         loaded_params = set()
