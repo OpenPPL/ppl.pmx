@@ -15,7 +15,7 @@ def pseudo_quantize_linear_weight(w, n_bit=4, zero_point=True, group_size=-1):
         min_int = 0
         scales = (max_val - min_val).clamp(min=1e-5) / max_int
         zeros = (-torch.round(min_val / scales)).clamp_(min_int, max_int)
-        # w = (torch.clamp(torch.round(w / scales) + zeros, min_int, max_int) - zeros) * scales
+        w = (torch.clamp(torch.round(w / scales) + zeros, min_int, max_int) - zeros) * scales
     else:
         max_val = w.abs().amax(dim=1, keepdim=True)
         max_val = max_val.clamp(min=1e-5)
@@ -23,7 +23,7 @@ def pseudo_quantize_linear_weight(w, n_bit=4, zero_point=True, group_size=-1):
         min_int = - 2 ** (n_bit - 1)
         scales = max_val / max_int
         zeros = None
-        # w = torch.clamp(torch.round(w / scales), min_int, max_int) * scales
+        w = torch.clamp(torch.round(w / scales), min_int, max_int) * scales
 
     w = w.reshape(org_w_shape)
     scales = scales.view(w.shape[0], -1)
