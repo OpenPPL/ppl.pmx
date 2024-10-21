@@ -258,7 +258,7 @@ class WoquColumnParallelLinear(torch.nn.Module):
         else:
             self.register_parameter("zeropoint", None)
         
-        self.scale = nn.Parameter(torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.float32, requires_grad=False))
+        self.scale = nn.Parameter(torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.float16, requires_grad=False))
 
     def forward(self, X: torch.Tensor):
         return OPMX.woqu_column_parallel_linear(
@@ -330,7 +330,7 @@ class WoquRowParallelLinear(torch.nn.Module):
             self.register_parameter("zeropoint", None)
         
         
-        self.scale = nn.Parameter(torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.float32, requires_grad=False))
+        self.scale = nn.Parameter(torch.ones(self.out_features_per_partition, self.in_features // self.group_size, dtype=torch.float16, requires_grad=False))
 
     def forward(self, X: torch.Tensor):
         return OPMX.woqu_row_parallel_linear(
