@@ -26,12 +26,14 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
     # weight sharding
     hidden_dim = params['hidden_dim']
     intermediate_dim = params['intermediate_dim']
-    n_heads_per_shard = params['num_heads'] // num_shards
+    num_heads = params['num_heads']
+    n_heads_per_shard = num_heads // num_shards
 
-    num_kv_heads = params['num_kv_heads'] if 'num_kv_heads' in params else params['num_heads']
+    num_kv_heads = params.get('num_kv_heads', num_heads)
     num_kv_heads_per_shard = num_kv_heads // num_shards
 
-    dims_per_head = hidden_dim // params['num_heads']
+    dims_per_head = params.get('head_dim', hidden_dim // params['num_heads'])
+    query_dim = dims_per_head * num_heads
     key_value_dim = dims_per_head * num_kv_heads
     
     write_json(params, os.path.join(model_path, "opmx_params.json"))
@@ -52,7 +54,7 @@ def merge_pmx_model(model_path, input_base_path, num_shards):
                         for i in range(num_shards)
                     ],
                     dim=0,
-                ).reshape(hidden_dim, hidden_dim)
+                ).reshape(query_dim, hidden_dim)
 
         merge_wk = torch.cat(
                     [

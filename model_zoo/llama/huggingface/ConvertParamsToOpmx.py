@@ -64,6 +64,7 @@ def write_pmx_model(model_path, input_base_path):
     pmx_params_dict['norm_eps'] = params['rms_norm_eps']
     pmx_params_dict['vocab_size'] = params['vocab_size']
     pmx_params_dict['num_kv_heads'] = params.get('num_key_value_heads', params['num_attention_heads'])
+    pmx_params_dict['head_dim'] = params.get('head_dim', params['hidden_size'] // params['num_attention_heads'])
 
     # compute intermediate_size
     hidden_dim = pmx_params_dict['hidden_dim']

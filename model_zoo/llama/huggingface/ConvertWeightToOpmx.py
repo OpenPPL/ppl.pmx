@@ -64,6 +64,7 @@ def write_pmx_model(model_path, input_base_path, model_type):
     pmx_params_dict['norm_eps'] = params['rms_norm_eps']
     pmx_params_dict['vocab_size'] = params['vocab_size']
     pmx_params_dict['num_kv_heads'] = params.get('num_key_value_heads', params['num_attention_heads'])
+    pmx_params_dict['head_dim'] = params.get('head_dim', params['hidden_size'] // params['num_attention_heads'])
 
     # compute intermediate_size
     hidden_dim = pmx_params_dict['hidden_dim']
@@ -84,7 +85,8 @@ def write_pmx_model(model_path, input_base_path, model_type):
     # TO DO: GQA / MQA, only test on llama
     num_heads = pmx_params_dict['num_heads']
     num_kv_heads = pmx_params_dict['num_kv_heads']
-    dims_per_head = hidden_dim // num_heads
+    dims_per_head = pmx_params_dict['head_dim']
+    query_dim = dims_per_head * num_heads
     key_value_dim = dims_per_head * num_kv_heads
 
     # load weights
@@ -113,7 +115,7 @@ def write_pmx_model(model_path, input_base_path, model_type):
 
     for layer_i in range(pmx_params_dict['num_layers']):
 
-        wq = unpermute(hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"])
+        wq = unpermute(hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"], num_heads, query_dim, hidden_dim)
         wk = unpermute(hf_model_state_dict[f"model.layers.{layer_i}.self_attn.k_proj.weight"], num_kv_heads, key_value_dim, hidden_dim)
         wv = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.v_proj.weight"]
 

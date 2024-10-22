@@ -5,6 +5,7 @@ from typing import Optional
 class ModelParams:
     hidden_dim: int = 512
     intermediate_dim: int = 2048
+    head_dim: Optional[int] = None
 
     num_layers: int = 8
     num_heads: int = 8
