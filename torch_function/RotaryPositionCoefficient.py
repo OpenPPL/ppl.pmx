@@ -4,7 +4,7 @@ import math
 torch2onnx_dtype = {torch.float16: 10,
                     torch.float32: 1}
 
-def rotray_yarn_coeff(max_seqlen: torch.Tensor,
+def __rotray_yarn_coeff(max_seqlen: torch.Tensor,
                     device: torch.device, data_type: torch.dtype,
                     rotary_dim: int,
                     theta: float = 10000.0,
@@ -83,7 +83,7 @@ def rotray_yarn_coeff(max_seqlen: torch.Tensor,
     return (emb.cos() * _mscale).to(data_type), (emb.sin() * _mscale).to(data_type)
 
 
-class RotaryPositionEmbedding(torch.autograd.Function):
+class RotaryPositionCoefficient(torch.autograd.Function):
     @staticmethod
     def symbolic(g, max_seqlen: torch.Value,
                 device: torch.device, data_type: torch.dtype,
@@ -134,7 +134,7 @@ class RotaryPositionEmbedding(torch.autograd.Function):
         assert scaling_type == 'yarn'
 
         if scaling_type == 'yarn':
-            rotary_sin, rotary_cos = rotray_yarn_coeff(
+            rotary_sin, rotary_cos = __rotray_yarn_coeff(
                 max_seqlen, device, data_type,
                 rotary_dim, theta,
                 original_max_position_embeddings,
@@ -145,13 +145,23 @@ class RotaryPositionEmbedding(torch.autograd.Function):
         return rotary_sin, rotary_cos
 
 
-def rotary_position_embedding(query: torch.Tensor, key: torch.Tensor,
-                start_pos: torch.Tensor, pad_len: torch.Tensor = None,
-                rotary_dim: int = 0, theta: float = 10000.0, bypass_key: bool = False,
-                max_position_embeddings: int = 2048, scaling_type: str = '',
-                scaling_factor: float = 1.0) -> torch.Tensor:
-    return RotaryPositionEmbedding.apply(query, key, start_pos, pad_len, rotary_dim, theta, bypass_key,
-                                         max_position_embeddings, scaling_type, scaling_factor)
+def rotary_position_coefficient(
+                max_seqlen: torch.Tensor, 
+                device: torch.device, data_type: torch.dtype,
+                rotary_dim: int,
+                theta: float = 10000.0, max_position_embeddings: int = 2048,
+                original_max_position_embeddings: int = 4096, 
+                scaling_type: str = '',
+                scaling_factor: float = 1.0,
+                scaling_beta_fast: int = 32,
+                scaling_beta_slow: int = 1,
+                scaling_mscale: float = 0.707,
+                scaling_mscale_all_dim: float = 0.707) -> torch.Tensor:
+    return RotaryPositionCoefficient.apply(
+        max_seqlen, device, data_type, rotary_dim,
+        theta, max_position_embeddings, original_max_position_embeddings,
+        scaling_type, scaling_factor, scaling_beta_fast, scaling_beta_slow,
+        scaling_mscale, scaling_mscale_all_dim)
 
 
 # if __name__ == "__main__":

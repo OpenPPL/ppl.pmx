@@ -23,6 +23,7 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 start_pos: torch.Value, decoding_batches: torch.Value,
                 max_seqlen: torch.Value, max_kvlen: torch.Value,
                 cache: torch.Value, scale: Optional[torch.Value],
+                attn_mask: Optional[torch.Value],
                 proc_group: dist.ProcessGroup,
                 num_heads: int, hidden_dim: int,
                 q_lora_rank: int, kv_lora_rank: int,
@@ -36,6 +37,34 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 cache_mode: int = 0, cache_layout: int = 0,
                 page_size: int = 128):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
+        if attn_mask is not None:
+            output = g.op('opmx.dynamic_batching::TensorParallelFusedMultiLatentCacheAttention',
+                hidden_states,
+                q_a_weight, q_norm_weight, q_b_weight,
+                kv_a_weight, kv_norm_weight,
+                k_b_weight, v_b_weight, o_weight,
+                rotary_sin, rotary_cos,
+                seqstarts, kvstarts, cachestarts,
+                start_pos, decoding_batches,
+                max_seqlen, max_kvlen,
+                cache, scale, attn_mask,
+                num_heads_i=num_heads,
+                hidden_dim_i=hidden_dim,
+                q_lora_rank_i=q_lora_rank,
+                kv_lora_rank_i=kv_lora_rank,
+                head_dim_i=head_dim,
+                rotray_dim_i=rotray_dim,
+                is_causal_i=is_causal,
+                is_interleaved_rotary_i=is_interleaved_rotary,
+                num_kv_heads_i=num_kv_heads,
+                vo_head_dim_i=vo_head_dim,
+                num_layer_i=num_layer,
+                layer_idx_i=layer_idx,
+                quant_bit_i=quant_bit,
+                quant_group_i=quant_group,
+                cache_mode_i=cache_mode,
+                cache_layout_i=cache_layout,
+                page_size_i=page_size)
         if scale is not None:
             output = g.op('opmx.dynamic_batching::TensorParallelFusedMultiLatentCacheAttention',
                 hidden_states,
@@ -105,6 +134,7 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 start_pos: torch.Tensor, decoding_batches: torch.Tensor,
                 max_seqlen: torch.Tensor, max_kvlen: torch.Tensor,
                 cache: torch.Tensor, scale: Optional[torch.Tensor],
+                attn_mask: Optional[torch.Tensor],
                 proc_group: dist.ProcessGroup,
                 num_heads: int, hidden_dim: int,
                 q_lora_rank: int, kv_lora_rank: int,
@@ -121,14 +151,14 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
             return hidden_states
         
         num_local_heads = num_heads
-        num_local_kv_heads = num_kv_heads
+        num_local_kv_heads = num_kv_heads if num_kv_heads > 0 else num_heads
         if proc_group is not None and torch.distributed.get_world_size(proc_group) > 1:
             world_size = torch.distributed.get_world_size(proc_group)
             num_local_heads = num_heads // world_size
             num_local_kv_heads = num_kv_heads // world_size
 
-        qk_nope_dim = head_dim - rotray_dim
-        qk_rope_dim = rotray_dim
+        qk_nope_head_dim = head_dim - rotray_dim
+        qk_rope_head_dim = rotray_dim
         _vo_head_dim = vo_head_dim
         if vo_head_dim == 0:
             _vo_head_dim = head_dim
@@ -170,18 +200,18 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
             q = F.linear(hidden_states, q_a_weight)
         else:
             q = F.linear(rms_norm(F.linear(hidden_states, q_a_weight), q_norm_weight), q_b_weight)
-        q = q.view(-1, num_local_heads, qk_nope_dim + qk_rope_dim) # (b*s, h, qk_n + qk_r)
+        q = q.view(-1, num_local_heads, qk_nope_head_dim + qk_rope_head_dim) # (b*s, h, qk_n + qk_r)
 
         compressed_kv = F.linear(hidden_states, kv_a_weight)
-        compressed_kv = compressed_kv.view(-1, 1, kv_lora_rank + qk_rope_dim)
+        compressed_kv = compressed_kv.view(-1, 1, kv_lora_rank + qk_rope_head_dim)
         compressed_kv[..., :kv_lora_rank] = rms_norm(compressed_kv[..., :kv_lora_rank], kv_norm_weight)
 
         if rotray_dim > 0 and rotary_sin.numel() > 0 and rotary_cos.numel() > 0:
-            q[..., -qk_rope_dim:] = apply_rotary(
-                q[..., -qk_rope_dim:], seqstarts, start_pos,
+            q[..., -qk_rope_head_dim:] = apply_rotary(
+                q[..., -qk_rope_head_dim:], seqstarts, start_pos,
                 rotary_sin, rotary_cos, is_interleaved_rotary)
-            compressed_kv[..., -qk_rope_dim:] = apply_rotary(
-                compressed_kv[..., -qk_rope_dim:], seqstarts, start_pos,
+            compressed_kv[..., -qk_rope_head_dim:] = apply_rotary(
+                compressed_kv[..., -qk_rope_head_dim:], seqstarts, start_pos,
                 rotary_sin, rotary_cos, is_interleaved_rotary)
 
         # CC method, TODO: ACC method
@@ -195,18 +225,18 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
             cache_mode, cache_layout, page_size)
 
         compressed_kv, k_pe = torch.split( # (b*s, 1, kv_lora + qk_r)
-            compressed_kv, [kv_lora_rank, qk_rope_dim], dim=-1
+            compressed_kv, [kv_lora_rank, qk_rope_head_dim], dim=-1
         )
         compressed_kv = compressed_kv.view(-1, kv_lora_rank)
         # 真实现的时候可以修改LDA，欸，Torch你在干嘛？
-        k = F.linear(compressed_kv, k_b_weight).view(-1, num_local_kv_heads, qk_nope_dim)
+        k = F.linear(compressed_kv, k_b_weight).view(-1, num_local_kv_heads, qk_nope_head_dim)
         k = torch.cat([k, k_pe.expand(k_pe.shape[0], k.shape[1], k_pe.shape[2])], dim=-1) # (b*s, h, qk_n + qk_r)
         v = F.linear(compressed_kv, v_b_weight).view(-1, num_local_kv_heads, _vo_head_dim) # (b*s, h, vo_d)
 
         output_parallel = multi_head_attention(
             q, k, v, seqstarts,
             kvstarts, decoding_batches,
-            max_seqlen, max_kvlen, None,
+            max_seqlen, max_kvlen, attn_mask,
             num_local_heads, head_dim,
             is_causal, False, num_local_kv_heads) # (bs, h, vo_d)
 
@@ -228,6 +258,7 @@ def tensor_parallel_fused_multi_head_cache_attention(
                 start_pos: torch.Tensor, decoding_batches: torch.Tensor,
                 max_seqlen: torch.Tensor, max_kvlen: torch.Tensor,
                 cache: torch.Tensor, scale: Optional[torch.Tensor],
+                attn_mask: Optional[torch.Tensor],
                 proc_group: dist.ProcessGroup,
                 num_heads: int, hidden_dim: int,
                 q_lora_rank: int, kv_lora_rank: int,
@@ -240,6 +271,10 @@ def tensor_parallel_fused_multi_head_cache_attention(
                 quant_bit: int = 0, quant_group: int = 8,
                 cache_mode: int = 0, cache_layout: int = 0,
                 page_size: int = 128) -> torch.Tensor:
+    if attn_mask is not None and scale is None:
+        _scale = torch.empty(0, device=hidden_states.device)
+    else:
+        _scale = scale
     _rotary_sin = rotary_sin
     _rotary_cos = rotary_cos
     _q_b_weight = q_b_weight
@@ -262,7 +297,7 @@ def tensor_parallel_fused_multi_head_cache_attention(
         seqstarts, kvstarts, cachestarts,
         start_pos, decoding_batches,
         max_seqlen, max_kvlen,
-        cache, scale,
+        cache, _scale, attn_mask,
         proc_group,
         num_heads, hidden_dim,
         _q_lora_rank, kv_lora_rank,
@@ -341,7 +376,7 @@ if __name__ == "__main__":
                     seqstarts, kvstarts, cachestarts,
                     start_pos, decoding_batches,
                     max_seqlen, max_kvlen,
-                    cache, scale,
+                    cache, scale, None,
                     None,
                     self.num_heads, self.hidden_dim, self.q_lora_rank, self.kv_lora_rank,
                     self.head_dim, self.rotray_dim,
@@ -376,9 +411,9 @@ if __name__ == "__main__":
 
     num_heads = 128
     kv_lora_rank = 512
-    qk_rope_dim = 64
+    qk_rope_head_dim = 64
     q_load_rank = 1536
-    qk_nope_dim = 128
+    qk_nope_head_dim = 128
     v_head_dim = 128
 
     tensor_type = torch.float
@@ -388,12 +423,12 @@ if __name__ == "__main__":
     seqstarts = torch.tensor([0, seqlen, seqlen], dtype=torch.int64).cumsum(dim=0)
     decoding_batches = torch.tensor([0], dtype=torch.int64)
     start_pos = torch.full([batch], 0, dtype=torch.int64)
-    rope_sin = torch.randn(genlen, qk_rope_dim, dtype=tensor_type)
+    rope_sin = torch.randn(genlen, qk_rope_head_dim, dtype=tensor_type)
 
-    cache = torch.zeros([num_layer, 1, 1, batch * genlen, kv_lora_rank + qk_rope_dim], dtype=tensor_type)
+    cache = torch.zeros([num_layer, 1, 1, batch * genlen, kv_lora_rank + qk_rope_head_dim], dtype=tensor_type)
     cachestarts = torch.arange(0, batch * genlen, genlen, dtype=torch.int64)
 
-    test_op1 = TestModule(num_heads, hidden_dim, q_load_rank, kv_lora_rank, qk_nope_dim + qk_rope_dim, qk_rope_dim,
+    test_op1 = TestModule(num_heads, hidden_dim, q_load_rank, kv_lora_rank, qk_nope_head_dim + qk_rope_head_dim, qk_rope_head_dim,
                      True, True, num_heads, v_head_dim, num_layer, layer_idx, 0, 8, 0, cache_layout)
 
     output = test_op1.forward(hidden_states, rope_sin, rope_sin, seqstarts, seqstarts, cachestarts, start_pos, decoding_batches, seqlen, seqlen, cache, None)

@@ -3,14 +3,15 @@ from dataclasses import dataclass
 @dataclass
 class DeepSeekV2Params:
     hidden_dim: int = 512
-    intermediate_dim: int = 2048
+    intermediate_dim: int = 12288
 
     num_layers: int = 60
     num_heads: int = 128
+    num_kv_heads: int = 128
     q_lora_rank: int = 1536
     kv_lora_rank: int = 512
-    qk_nope_dim: int = 128
-    qk_rope_dim: int = 64
+    qk_nope_head_dim: int = 128
+    qk_rope_head_dim: int = 64
     v_head_dim: int = 128
 
     vocab_size: int = -1
@@ -36,9 +37,13 @@ class DeepSeekV2Params:
     origin_max_position_embeddings: int = 4096
     max_position_embeddings: int = 163840
 
+    num_first_dense_layers: int = 1 # first_k_dense_replace
     num_shared_experts: int = 2
     num_experts: int = 160
     num_experts_per_token: int = 6
     num_expert_groups: int = 8
+    moe_scaling_factor: float = 16.0, # routed_scaling_factor
+    moe_normalize_prob: bool = False, # norm_topk_prob
+    moe_intermediate_dim: int = 1536
     moe_topk_group: int = 3
     moe_topk_method: str = 'group_limited_greedy'

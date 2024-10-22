@@ -73,27 +73,26 @@ class LLaMA(__TextGenerator__):
             if self.model.params.cache_mode == 1:
                 total_cache_len += round_up_to_page(len(p) + max_gen_len)
 
-        head_dim = self.model.params.hidden_dim // self.model.params.num_heads
-        num_local_kv_heads = self.model.params.num_kv_heads // torch.distributed.get_world_size(group=self.model.proc_group)
+        cache_head_dim = self.model.params.kv_lora_rank + self.model.params.qk_rope_head_dim
         num_layers = self.model.params.num_layers
 
         if self.model.params.cache_layout == 0:
-            cache_prefix_shape = (total_cache_len, num_layers, 2, num_local_kv_heads)
+            cache_prefix_shape = (total_cache_len, num_layers, 1, 1)
         elif self.model.params.cache_layout == 1:
-            cache_prefix_shape = (num_layers, total_cache_len, 2, num_local_kv_heads)
+            cache_prefix_shape = (num_layers, total_cache_len, 1, 1)
         elif self.model.params.cache_layout == 2:
-            cache_prefix_shape = (num_layers, 2, total_cache_len, num_local_kv_heads)
+            cache_prefix_shape = (num_layers, 1, total_cache_len, 1)
         elif self.model.params.cache_layout == 3:
-            cache_prefix_shape = (num_layers, 2, num_local_kv_heads, total_cache_len)
+            cache_prefix_shape = (num_layers, 1, 1, total_cache_len)
         else:
             raise Exception("unsupported cache_layout: {}".format(self.model.params.cache_layout))
 
         if self.model.params.cache_quant_bit == 8:
-            scale_head_dim = head_dim // self.model.params.cache_quant_group
-            kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.int8).cuda()
+            scale_head_dim = cache_head_dim // self.model.params.cache_quant_group
+            kv_cache = torch.zeros(cache_prefix_shape + (cache_head_dim,), dtype=torch.int8).cuda()
             kv_scale = torch.zeros(cache_prefix_shape + (scale_head_dim,), dtype=torch.float16).cuda()
         else:
-            kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.float16).cuda()
+            kv_cache = torch.zeros(cache_prefix_shape + (cache_head_dim,), dtype=torch.float16).cuda()
             kv_scale = torch.empty(0)
 
         max_prompt_len = max([len(t) for t in unprocessed_prompt_tokens_ids])
@@ -235,31 +234,30 @@ class LLaMA(__TextGenerator__):
         page_size = self.model.params.page_size
 
         total_cache_len = bsz * total_len
-        head_dim = self.model.params.hidden_dim // self.model.params.num_heads
-        num_local_kv_heads = self.model.params.num_kv_heads // torch.distributed.get_world_size(group=self.model.proc_group)
+        cache_head_dim = self.model.params.kv_lora_rank + self.model.params.qk_rope_head_dim
         num_layers = self.model.params.num_layers
 
         if self.model.params.cache_layout == 0:
-            cache_prefix_shape = (total_cache_len, num_layers, 2, num_local_kv_heads)
+            cache_prefix_shape = (total_cache_len, num_layers, 1, 1)
             max_tokens_idx = 0
         elif self.model.params.cache_layout == 1:
-            cache_prefix_shape = (num_layers, total_cache_len, 2, num_local_kv_heads)
+            cache_prefix_shape = (num_layers, total_cache_len, 1, 1)
             max_tokens_idx = 1
         elif self.model.params.cache_layout == 2:
-            cache_prefix_shape = (num_layers, 2, total_cache_len, num_local_kv_heads)
+            cache_prefix_shape = (num_layers, 1, total_cache_len, 1)
             max_tokens_idx = 2
         elif self.model.params.cache_layout == 3:
-            cache_prefix_shape = (num_layers, 2, num_local_kv_heads, total_cache_len)
+            cache_prefix_shape = (num_layers, 1, 1, total_cache_len)
             max_tokens_idx = 3
         else:
             raise Exception("unsupported cache_layout: {}".format(self.model.params.cache_layout))
 
         if self.model.params.cache_quant_bit == 8:
-            scale_head_dim = head_dim // self.model.params.cache_quant_group
-            kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.int8)
+            scale_head_dim = cache_head_dim // self.model.params.cache_quant_group
+            kv_cache = torch.zeros(cache_prefix_shape + (cache_head_dim,), dtype=torch.int8)
             kv_scale = torch.zeros(cache_prefix_shape + (scale_head_dim,), dtype=torch.float16)
         else:
-            kv_cache = torch.zeros(cache_prefix_shape + (head_dim,), dtype=torch.float16)
+            kv_cache = torch.zeros(cache_prefix_shape + (cache_head_dim,), dtype=torch.float16)
             kv_scale = torch.empty(0)
 
         seqlen = total_len // 2

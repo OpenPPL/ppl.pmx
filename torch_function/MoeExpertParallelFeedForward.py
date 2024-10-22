@@ -186,7 +186,7 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
                              expert_up_proj_weight[local_expert_idx],
                              expert_up_proj_bias[local_expert_idx] if up_porj_bias_term else None)
                 )
-            up_proj_output = swiglu(up_proj_output) if has_feed_forward_gate else silu(up_proj_output)
+            up_proj_output = act_fn(up_proj_output)
             # 非本地expert的token直接置零，实现时可以将置零融合到MOE REDUCE里面
             down_proj_output = states_expand_permute.zero_().view(-1, hidden_dim)
             # here will be grouped gemm
