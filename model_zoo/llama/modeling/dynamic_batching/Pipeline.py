@@ -73,7 +73,7 @@ class LLaMA(__TextGenerator__):
             if self.model.params.cache_mode == 1:
                 total_cache_len += round_up_to_page(len(p) + max_gen_len)
 
-        head_dim = self.model.params.hidden_dim // self.model.params.num_heads
+        head_dim = self.model.params.head_dim if self.model.params.head_dim is not None else self.model.params.hidden_dim // self.model.params.num_heads
         num_local_kv_heads = self.model.params.num_kv_heads // torch.distributed.get_world_size(group=self.model.proc_group)
         num_layers = self.model.params.num_layers
 
@@ -235,7 +235,7 @@ class LLaMA(__TextGenerator__):
         page_size = self.model.params.page_size
 
         total_cache_len = bsz * total_len
-        head_dim = self.model.params.hidden_dim // self.model.params.num_heads
+        head_dim = self.model.params.head_dim if self.model.params.head_dim is not None else self.model.params.hidden_dim // self.model.params.num_heads
         num_local_kv_heads = self.model.params.num_kv_heads // torch.distributed.get_world_size(group=self.model.proc_group)
         num_layers = self.model.params.num_layers
 

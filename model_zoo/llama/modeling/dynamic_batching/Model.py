@@ -308,8 +308,8 @@ class Transformer(nn.Module):
         num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
         num_local_heads = params.num_heads // world_size
         num_local_kv_heads = num_kv_heads // world_size
-        head_dim = params.hidden_dim // params.num_heads
-        head_dim = 
+        head_dim = params.head_dim if params.head_dim is not None else params.hidden_dim // params.num_heads
+
         self.local_q_dim = num_local_heads * head_dim
         self.local_kv_dim = num_local_kv_heads * head_dim
         self.local_imm_dim = params.intermediate_dim // world_size 
