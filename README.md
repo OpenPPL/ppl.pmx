@@ -18,6 +18,15 @@ About add new operator: [Link](docs/AddNewOp.md)
 
 About update an operator's version: [Link](docs/UpdateOp.md)
 
+# Install OPMX
+
+You can install opmx like:
+
+```
+pip install -e .
+```
+Then you can just use OPMX like a python api.
+
 # Use OPMX Python API
 
 OPMX provides functional API based on `torch.autograd.Function`.

@@ -471,6 +471,53 @@ class Transformer(nn.Module):
         return output
 
 
+    @torch.inference_mode()
+    def logit_forward(self, tokens: torch.Tensor, attn_mask: Optional[torch.Tensor],
+                      seqstarts: torch.Tensor, kvstarts: torch.Tensor,
+                      cachestarts: torch.Tensor, decoding_batches: torch.Tensor,
+                      start_pos: torch.Tensor, max_seqlen: torch.Tensor,  max_kvlen: torch.Tensor,
+                      kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
+        h = self.tok_embeddings(tokens)
+        # TensorDumper.dump(h, "emb_out")
+
+        _kv_scale = kv_scale
+        TensorDumper.dump(tokens, "token_ids")
+        if attn_mask is not None:
+            TensorDumper.dump(attn_mask, "attn_mask")
+        if self.fused_kvcache and attn_mask is not None:
+            if kv_scale is None: # mount an empty scale for friendly exporting
+                _kv_scale = torch.empty(0, dtype=h.dtype)
+        TensorDumper.dump(seqstarts, "seqstarts")
+        TensorDumper.dump(kvstarts, "kvstarts")
+        TensorDumper.dump(cachestarts, "cachestarts")
+        TensorDumper.dump(decoding_batches, "decoding_batches")
+        TensorDumper.dump(start_pos, "start_pos")
+        TensorDumper.dump(max_seqlen, "max_seqlen")
+        TensorDumper.dump(max_kvlen, "max_kvlen")
+        TensorDumper.dump(kv_cache, "kv_cache")
+        if kv_scale is not None:
+            TensorDumper.dump(kv_scale, "kv_scale")
+
+        if self.with_alibi and not self.fused_alibi:
+            attn_mask = OPMX.dynamic_batching.alibi_mask(seqstarts, kvstarts, attn_mask, self.params.num_heads, h.dtype)
+            # TensorDumper.dump(attn_mask, "alibi_mask")
+
+        norm = None
+        for layer in self.layers:
+            h, norm = layer(h, norm, attn_mask, seqstarts, kvstarts, cachestarts,
+                            decoding_batches, start_pos, max_seqlen, max_kvlen,
+                            kv_cache, _kv_scale)
+
+        h, norm = self.norm(h, norm)
+        # TensorDumper.dump(h, "last_rms_norm")
+        # TensorDumper.dump(gathered_h, "gathered_h")
+        output = self.output(h)  # only compute last logits
+        # TensorDumper.dump(output, "logits_before_cast")
+        output = output.float()
+        TensorDumper.dump(output, "logits")
+        return output
+
+
     @torch.no_grad()
     def load_state_dict(self, state_dict: Mapping[str, Any]):
         loaded = set()
