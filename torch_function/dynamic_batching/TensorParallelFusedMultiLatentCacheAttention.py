@@ -30,6 +30,7 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 head_dim: int, rotray_dim: int,
                 is_causal: bool = True,
                 is_interleaved_rotary: bool = True,
+                softmax_scale: float = 0, 
                 num_kv_heads: int = 0,
                 vo_head_dim: int = 0,
                 num_layer: int = 1, layer_idx: int = 0,
@@ -56,6 +57,7 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 rotray_dim_i=rotray_dim,
                 is_causal_i=is_causal,
                 is_interleaved_rotary_i=is_interleaved_rotary,
+                softmax_scale_f=softmax_scale,
                 num_kv_heads_i=num_kv_heads,
                 vo_head_dim_i=vo_head_dim,
                 num_layer_i=num_layer,
@@ -84,6 +86,7 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 rotray_dim_i=rotray_dim,
                 is_causal_i=is_causal,
                 is_interleaved_rotary_i=is_interleaved_rotary,
+                softmax_scale_f=softmax_scale,
                 num_kv_heads_i=num_kv_heads,
                 vo_head_dim_i=vo_head_dim,
                 num_layer_i=num_layer,
@@ -112,6 +115,7 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 rotray_dim_i=rotray_dim,
                 is_causal_i=is_causal,
                 is_interleaved_rotary_i=is_interleaved_rotary,
+                softmax_scale_f=softmax_scale,
                 num_kv_heads_i=num_kv_heads,
                 vo_head_dim_i=vo_head_dim,
                 num_layer_i=num_layer,
@@ -141,6 +145,7 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 head_dim: int, rotray_dim: int,
                 is_causal: bool = True,
                 is_interleaved_rotary: bool = True,
+                softmax_scale: float = 0,
                 num_kv_heads: int = 0,
                 vo_head_dim: int = 0,
                 num_layer: int = 1, layer_idx: int = 0,
@@ -166,9 +171,9 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
 
         def rms_norm(
             X: torch.Tensor, weight: torch.Tensor,
-            axis: int = -1, eps: float = 1e-5):
+            axis: int = -1, eps: float = 1e-6):
             x = X.float()
-            mean_square = (x * x).mean(axis, keepdim=True)
+            mean_square = x.pow(2).mean(axis, keepdim=True)
             Y = x * torch.rsqrt(mean_square + eps)
             return Y.type_as(X) * weight
         
@@ -238,7 +243,7 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
             kvstarts, decoding_batches,
             max_seqlen, max_kvlen, attn_mask,
             num_local_heads, head_dim,
-            is_causal, False, num_local_kv_heads) # (bs, h, vo_d)
+            is_causal, False, softmax_scale, num_local_kv_heads) # (bs, h, vo_d)
 
         output_parallel = F.linear(output_parallel.reshape(-1, num_heads * vo_head_dim), o_weight)
 
@@ -265,6 +270,7 @@ def tensor_parallel_fused_multi_head_cache_attention(
                 head_dim: int, rotray_dim: int,
                 is_causal: bool = True,
                 is_interleaved_rotary: bool = True,
+                softmax_scale: float = 0,
                 num_kv_heads: int = 0,
                 vo_head_dim: int = 0,
                 num_layer: int = 1, layer_idx: int = 0,
@@ -303,6 +309,7 @@ def tensor_parallel_fused_multi_head_cache_attention(
         _q_lora_rank, kv_lora_rank,
         head_dim, rotray_dim,
         is_causal, is_interleaved_rotary,
+        softmax_scale,
         num_kv_heads, vo_head_dim,
         num_layer, layer_idx,
         quant_bit, quant_group,

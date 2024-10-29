@@ -10,7 +10,7 @@ import torch.distributed as dist
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
-from Params import DeepSeekV2Params
+from deepseek_v2.modeling.Params import DeepSeekV2Params
 from ModelUtils import __TextGenerator__
 import ModelParallel
 
@@ -32,7 +32,7 @@ def load(
 
     if dynamic_batching:
         from deepseek_v2.modeling.dynamic_batching.Model import TensorDumper, Transformer
-        from deepseek_v2.modeling.dynamic_batching.Pipeline import Pipeline
+        from deepseek_v2.modeling.dynamic_batching.Pipeline import TextGenerator
         if cache_layout != 3:
             print("Info: we suggest using cache_layout 3 for cuda inference performance")
 
@@ -69,7 +69,7 @@ def load(
 
     model.load_state_dict(checkpoint)
 
-    generator = Pipeline(model)
+    generator = TextGenerator(model)
 
     if dump_tensor_path is not None:
         dump_path = os.path.join(dump_tensor_path, "rank_{}".format(local_rank))

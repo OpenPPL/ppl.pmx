@@ -21,7 +21,7 @@ class BatchState:
         self.is_decoding = False
 
 
-class LLaMA(__TextGenerator__):
+class TextGenerator(__TextGenerator__):
     def __init__(self, model: Transformer):
         self.model = model
         self.context_chunking = False

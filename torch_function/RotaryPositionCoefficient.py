@@ -4,7 +4,7 @@ import math
 torch2onnx_dtype = {torch.float16: 10,
                     torch.float32: 1}
 
-def __rotray_yarn_coeff(max_seqlen: torch.Tensor,
+def _rotray_yarn_coeff(max_seqlen: torch.Tensor,
                     device: torch.device, data_type: torch.dtype,
                     rotary_dim: int,
                     theta: float = 10000.0,
@@ -80,7 +80,7 @@ def __rotray_yarn_coeff(max_seqlen: torch.Tensor,
     )
 
     emb = torch.cat((freqs, freqs), dim=-1)
-    return (emb.cos() * _mscale).to(data_type), (emb.sin() * _mscale).to(data_type)
+    return (emb.sin() * _mscale).to(data_type), (emb.cos() * _mscale).to(data_type)
 
 
 class RotaryPositionCoefficient(torch.autograd.Function):
@@ -134,7 +134,7 @@ class RotaryPositionCoefficient(torch.autograd.Function):
         assert scaling_type == 'yarn'
 
         if scaling_type == 'yarn':
-            rotary_sin, rotary_cos = __rotray_yarn_coeff(
+            rotary_sin, rotary_cos = _rotray_yarn_coeff(
                 max_seqlen, device, data_type,
                 rotary_dim, theta,
                 original_max_position_embeddings,

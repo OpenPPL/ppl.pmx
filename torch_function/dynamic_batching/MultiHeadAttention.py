@@ -11,7 +11,7 @@ class MultiHeadAttention(torch.autograd.Function):
                  attn_mask: Optional[torch.Value],
                  num_heads: int, head_dim: int,
                  is_causal: bool = True, is_alibi: bool = False,
-                 num_kv_heads: int = 0):
+                 softmax_scale: float = 0, num_kv_heads: int = 0):
         # g: GraphContext, defined in onnx/_internal/jit_utils.py
         if attn_mask is not None:
             output = g.op('opmx.dynamic_batching::MultiHeadAttention',
@@ -22,6 +22,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
                 is_alibi_i=is_alibi,
+                softmax_scale_f=softmax_scale,
                 num_kv_heads_i=num_kv_heads)
         else:
             output = g.op('opmx.dynamic_batching::MultiHeadAttention',
@@ -32,6 +33,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
                 is_alibi_i=is_alibi,
+                softmax_scale_f=softmax_scale,
                 num_kv_heads_i=num_kv_heads)
         return output.setTypeAs(query)
 
@@ -43,6 +45,7 @@ class MultiHeadAttention(torch.autograd.Function):
                 attn_mask: Optional[torch.Tensor],
                 num_heads: int, head_dim: int,
                 is_causal: bool = True, is_alibi: bool = False,
+                softmax_scale: float = 0,
                 num_kv_heads: int = 0):
         if torch.onnx.is_in_onnx_export():
             return query
@@ -65,6 +68,11 @@ class MultiHeadAttention(torch.autograd.Function):
 
         bxs, vo_head_dim = __query.shape[0], __value.shape[-1]
         output = torch.zeros((bxs, num_heads, vo_head_dim), dtype=__query.dtype, device=__query.device)
+
+        if softmax_scale == 0:
+            __softmax_scale = 1.0 / torch.math.sqrt(head_dim)
+        else:
+            __softmax_scale = softmax_scale
 
         if is_alibi:
             if __name__ == "__main__":
@@ -92,7 +100,7 @@ class MultiHeadAttention(torch.autograd.Function):
             _query = __query[seqbeg:seqend].transpose(0, 1).float() # fix for qwen2-1.5b-instruct model
             _key = __key[kvbeg:kvend].transpose(0, 1).float()
             _value = __value[kvbeg:kvend].transpose(0, 1)
-            scores = torch.matmul(_query, _key.transpose(1, 2)) / torch.math.sqrt(head_dim)
+            scores = torch.matmul(_query, _key.transpose(1, 2)) * __softmax_scale
             if causal_mask is not None:
                 scores = scores + causal_mask
             if attn_mask is not None and attn_mask.numel() > 0:
@@ -119,10 +127,11 @@ def multi_head_attention(
                 attn_mask: Optional[torch.Tensor],
                 num_heads: int, head_dim: int,
                 is_causal: bool = True, is_alibi: bool = False,
-                num_kv_heads: int = 0) -> torch.Tensor:
+                softmax_scale: float = 0, num_kv_heads: int = 0) -> torch.Tensor:
     return MultiHeadAttention.apply(query, key, value, seqstarts, kvstarts, decoding_batches,
                                     max_seqlen, max_kvlen, attn_mask,
-                                    num_heads, head_dim, is_causal, is_alibi, num_kv_heads)
+                                    num_heads, head_dim, is_causal, is_alibi,
+                                    softmax_scale, num_kv_heads)
 
 
 if __name__ == "__main__":

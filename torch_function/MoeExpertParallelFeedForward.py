@@ -33,7 +33,7 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
         num_experts: int,
         num_experts_per_token: int,
         has_feed_forward_gate: bool = True,
-        up_porj_bias_term: bool = False,
+        up_proj_bias_term: bool = False,
         down_proj_bias_term: bool = False,
         has_shared_expert: bool = False,
         shared_intermediate_dim: int = 0,
@@ -56,7 +56,7 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
                     num_experts_i=num_experts,
                     num_experts_per_token_i=num_experts_per_token,
                     has_feed_forward_gate_i=has_feed_forward_gate,
-                    up_porj_bias_term_i=up_porj_bias_term,
+                    up_proj_bias_term_i=up_proj_bias_term,
                     down_proj_bias_term_i=down_proj_bias_term,
                     has_shared_expert_i=has_shared_expert,
                     shared_intermediate_dim_i=shared_intermediate_dim,
@@ -77,7 +77,7 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
                     num_experts_i=num_experts,
                     num_experts_per_token_i=num_experts_per_token,
                     has_feed_forward_gate_i=has_feed_forward_gate,
-                    up_porj_bias_term_i=up_porj_bias_term,
+                    up_proj_bias_term_i=up_proj_bias_term,
                     down_proj_bias_term_i=down_proj_bias_term,
                     has_shared_expert_i=has_shared_expert,
                     shared_intermediate_dim_i=shared_intermediate_dim,
@@ -106,7 +106,7 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
         num_experts: int,
         num_experts_per_token: int,
         has_feed_forward_gate: bool = True,
-        up_porj_bias_term: bool = False,
+        up_proj_bias_term: bool = False,
         down_proj_bias_term: bool = False,
         has_shared_expert: bool = False,
         shared_intermediate_dim: int = 0,
@@ -150,7 +150,7 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
                 output_parallel = F.linear(
                     hidden_states.view(-1, hidden_dim),
                     shared_up_proj_weight,
-                    shared_up_proj_bias if up_porj_bias_term else None)
+                    shared_up_proj_bias if up_proj_bias_term else None)
                 output_parallel = act_fn(output_parallel)
                 output_parallel = F.linear(
                     output_parallel,
@@ -173,7 +173,8 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
 
             # 分配所有token的空间，但只计算本地expert的部分
             flat_stats = states_expand_permute.view(-1, hidden_dim) # (b * s * es, hid)
-            up_proj_output = torch.zeros(flat_stats.shape[0], expert_intermediate_dim) # (b * s * es, e_imm)
+            # 非本地expert的token直接置零，实现时可以将置零融合到MOE REDUCE里面
+            down_proj_output = torch.zeros_like(flat_stats) # (b * s * es, hid)
             # here will be grouped gemm
             for local_expert_idx in range(num_local_experts):
                 expert_idx = local_expert_idx + local_expert_offset
@@ -181,23 +182,14 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
                 expert_end = expert_offset[expert_idx + 1]
                 if expert_end - expert_beg <= 0:
                     continue
-                up_proj_output[expert_beg:expert_end] = (
+                up_proj_output = (
                     F.linear(flat_stats[expert_beg:expert_end],
                              expert_up_proj_weight[local_expert_idx],
-                             expert_up_proj_bias[local_expert_idx] if up_porj_bias_term else None)
+                             expert_up_proj_bias[local_expert_idx] if up_proj_bias_term else None)
                 )
-            up_proj_output = act_fn(up_proj_output)
-            # 非本地expert的token直接置零，实现时可以将置零融合到MOE REDUCE里面
-            down_proj_output = states_expand_permute.zero_().view(-1, hidden_dim)
-            # here will be grouped gemm
-            for local_expert_idx in range(num_local_experts):
-                expert_idx = local_expert_idx + local_expert_offset
-                expert_beg = expert_offset[expert_idx]
-                expert_end = expert_offset[expert_idx + 1]
-                if expert_end - expert_beg <= 0:
-                    continue
+                up_proj_output = act_fn(up_proj_output)
                 down_proj_output[expert_beg:expert_end] = (
-                    F.linear(up_proj_output[expert_beg:expert_end],
+                    F.linear(up_proj_output,
                              expert_down_proj_weight[local_expert_idx],
                              expert_down_proj_bias[local_expert_idx] if down_proj_bias_term else None)
                 )
@@ -225,7 +217,7 @@ def moe_expert_parallel_feed_forward(
         num_experts: int,
         num_experts_per_token: int,
         has_feed_forward_gate: bool = True,
-        up_porj_bias_term: bool = False,
+        up_proj_bias_term: bool = False,
         down_proj_bias_term: bool = False,
         has_shared_expert: bool = False,
         shared_intermediate_dim: int = 0,
@@ -248,7 +240,7 @@ def moe_expert_parallel_feed_forward(
         num_experts,
         num_experts_per_token,
         has_feed_forward_gate,
-        up_porj_bias_term,
+        up_proj_bias_term,
         down_proj_bias_term,
         has_shared_expert,
         shared_intermediate_dim,

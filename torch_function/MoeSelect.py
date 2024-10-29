@@ -56,10 +56,10 @@ class MoeSelect(torch.autograd.Function):
             if 'greedy' in gating_method and len('greedy') == len(gating_method):
                 expert_weights, expert_indices = torch.topk(_scores, num_experts_per_token, dim=-1)
             if num_experts_per_token > 1 and gating_normalize_prob:
-                denominator = topk_weight.sum(dim=-1, keepdim=True) + 1e-20
-                topk_weight = topk_weight / denominator
+                denominator = expert_weights.sum(dim=-1, keepdim=True) + 1e-20
+                expert_weights = expert_weights / denominator
             else:
-                topk_weight *= gating_scaling_factor
+                expert_weights *= gating_scaling_factor
 
             flat_expert_indices = expert_indices.view(-1)   # (seqlen * num_experts_per_token)
             

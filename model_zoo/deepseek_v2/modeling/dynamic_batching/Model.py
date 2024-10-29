@@ -1,5 +1,6 @@
 import sys
 import os
+import math
 
 import torch
 from torch import nn
@@ -10,7 +11,7 @@ from typing import Mapping, Any, Optional
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../..")
 
 import torch_function as OPMX
-from Params import DeepSeekV2Params
+from deepseek_v2.modeling.Params import DeepSeekV2Params
 import ModelUtils
 from ModelParallel import ColumnParallelLinear, RowParallelLinear, ParallelEmbedding
 from ModelParallel import MoeColumnParallelLinear, MoeRowParallelLinear
@@ -44,7 +45,7 @@ class Attention(nn.Module):
                     proc_group, args.q_lora_rank, self.tp_num_heads * self.q_head_dim,
                     bias_term=False, gather_output=False)
         else:
-            self.q_a_proj = ColumnParallelLinear( # 要么TP要么DP
+            self.q_proj = ColumnParallelLinear( # 要么TP要么DP
                     proc_group, args.hidden_dim, self.tp_num_heads * self.q_head_dim,
                     bias_term=False, gather_output=False)
         self.kv_a_proj = ColumnParallelLinear( # 一定DP
@@ -61,6 +62,18 @@ class Attention(nn.Module):
             proc_group, self.tp_num_heads * args.v_head_dim, args.hidden_dim,
             bias_term=False, input_is_parallel=True)
 
+        self.softmax_scale = self.q_head_dim ** (-0.5)
+        if self.args.rope_scaling_type == "yarn":
+            mscale_all_dim = self.args.rope_scaling_mscale_all_dim
+            scaling_factor = self.args.rope_scaling_factor
+
+            def yarn_get_mscale(scale=1, mscale=1):
+                if scale <= 1:
+                    return 1.0
+                return 0.1 * mscale * math.log(scale) + 1.0
+            mscale = yarn_get_mscale(scaling_factor, mscale_all_dim)
+            self.softmax_scale = self.softmax_scale * mscale * mscale
+
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor],
                 rotary_sin: Optional[torch.Tensor], rotary_cos: Optional[torch.Tensor],
@@ -71,7 +84,7 @@ class Attention(nn.Module):
         _place_holder = torch.empty(0, device=x.device)
         output = OPMX.dynamic_batching.tensor_parallel_fused_multi_head_cache_attention(
             x,
-            self.q_a_proj.weight,
+            self.q_a_proj.weight if self.args.q_lora_rank > 0 else self.q_proj.weight,
             self.q_a_layernorm.weight if self.args.q_lora_rank > 0 else _place_holder,
             self.q_b_proj.weight if self.args.q_lora_rank > 0 else _place_holder,
             self.kv_a_proj.weight, self.kv_a_layernorm.weight,
@@ -90,6 +103,7 @@ class Attention(nn.Module):
             rotray_dim=self.args.qk_rope_head_dim,
             is_causal=True,
             is_interleaved_rotary=True,
+            softmax_scale=self.softmax_scale,
             num_kv_heads=0,
             vo_head_dim=self.args.v_head_dim,
             num_layer=self.args.num_layers,
@@ -111,7 +125,7 @@ class GateMLPWeight(nn.Module):
     ):
         super().__init__()
 
-        self.up_proj = ColumnParallelLinear(
+        self.up_gate_proj = ColumnParallelLinear(
             proc_group, hidden_dim, 2 * intermediate_dim,
             bias_term=False, gather_output=False)
         self.down_proj = RowParallelLinear(
@@ -133,7 +147,7 @@ class GateMoEWeight(nn.Module):
     ):
         super().__init__()
 
-        self.up_proj = MoeColumnParallelLinear(
+        self.up_gate_proj = MoeColumnParallelLinear(
             proc_group, num_experts, hidden_dim, 2 * intermediate_dim,
             bias_term=False, gather_output=False)
         self.down_proj = MoeRowParallelLinear(
@@ -175,7 +189,7 @@ class FeedForward(nn.Module):
             args.num_shared_experts * args.moe_intermediate_dim, tp_world_size)
 
         if self.layer_id < self.args.num_first_dense_layers:
-            self.up_proj = ColumnParallelLinear( # 要么TP要么DP
+            self.up_gate_proj = ColumnParallelLinear( # 要么TP要么DP
                 self.tp_proc_group, args.hidden_dim, 2 * args.intermediate_dim,
                 bias_term=False, gather_output=False)
             self.down_proj = RowParallelLinear( # 要么TP要么DP
@@ -196,7 +210,7 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         if self.layer_id < self.args.num_first_dense_layers:
-            x = self.up_proj(x)
+            x = self.up_gate_proj(x)
             x = OPMX.swiglu(x)
             output = self.down_proj(x)
         else:
@@ -204,19 +218,19 @@ class FeedForward(nn.Module):
             output = OPMX.moe_expert_parallel_feed_forward(
                 x,
                 self.gate.weight,
-                self.experts.up_proj.weight, bias,
+                self.experts.up_gate_proj.weight, bias,
                 self.experts.down_proj.weight, bias,
-                self.shared_experts.up_proj.weight if self.args.num_shared_experts > 0 else None,
-                bias if self.num_shared_experts > 0 else None,
+                self.shared_experts.up_gate_proj.weight if self.args.num_shared_experts > 0 else None,
+                bias if self.args.num_shared_experts > 0 else None,
                 self.shared_experts.down_proj.weight if self.args.num_shared_experts > 0 else None,
-                bias if self.num_shared_experts > 0 else None,
+                bias if self.args.num_shared_experts > 0 else None,
                 proc_group=self.ep_proc_group,
                 hidden_dim=self.args.hidden_dim,
                 expert_intermediate_dim=self.args.moe_intermediate_dim,
                 num_experts=self.args.num_experts,
                 num_experts_per_token=self.args.num_experts_per_token,
                 has_feed_forward_gate=True,
-                up_porj_bias_term=False,
+                up_proj_bias_term=False,
                 down_proj_bias_term=False,
                 has_shared_expert=self.args.num_shared_experts > 0,
                 shared_intermediate_dim=self.args.num_shared_experts * self.args.moe_intermediate_dim,
@@ -270,10 +284,12 @@ class TransformerBlock(nn.Module):
                                       cachestarts, decoding_batches,
                                       start_pos, max_seqlen, max_kvlen,
                                       kv_cache, kv_sacle)
+        # TensorDumper.dump(attn, "layer{}_attention_out".format(self.layer_id))
         norm, h = self.post_attention_layernorm(x, attn)
         # TensorDumper.dump(norm, "layer{}_ffn_norm_out".format(self.layer_id))
         # TensorDumper.dump(h, "layer{}_ffn_norm_skip_out".format(self.layer_id))
         ffn = self.mlp.forward(norm)
+        # TensorDumper.dump(ffn, "layer{}_ffn_out".format(self.layer_id))
         return h, ffn
 
 
@@ -295,10 +311,10 @@ class Transformer(nn.Module):
             tp_world_size = 1
             tp_proc_group = None
         self.tp_imm_dim = params.intermediate_dim // tp_world_size
-        self.tp_moe_imm_dim = params.moe_intermediate_size // tp_world_size
-        self.moe_imm_dim = params.moe_intermediate_size
+        self.tp_shared_expert_imm_dim = (params.moe_intermediate_dim * params.num_shared_experts) // tp_world_size
+        self.moe_imm_dim = params.moe_intermediate_dim
 
-        self.embed_tokens = ParallelEmbedding(tp_proc_group, params.vocab_size, params.hidden_dim) # 要么TP要么DP
+        self.tok_embeddings = ParallelEmbedding(tp_proc_group, params.vocab_size, params.hidden_dim) # 要么TP要么DP
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.num_layers):
@@ -317,7 +333,7 @@ class Transformer(nn.Module):
                 cachestarts: torch.Tensor, decoding_batches: torch.Tensor,
                 start_pos: torch.Tensor, max_seqlen: torch.Tensor,  max_kvlen: torch.Tensor,
                 kv_cache: torch.Tensor, kv_scale: torch.Tensor = None):
-        h = self.embed_tokens(tokens)
+        h = self.tok_embeddings(tokens)
         # TensorDumper.dump(h, "emb_out")
 
         _kv_scale = kv_scale
@@ -339,7 +355,7 @@ class Transformer(nn.Module):
 
         rope_sin, rope_cos = OPMX.rotary_position_coefficient(
             max_kvlen, h.device,
-            data_type=h.data_type,
+            data_type=h.dtype,
             rotary_dim=self.params.qk_rope_head_dim,
             theta=self.params.rope_theta,
             max_position_embeddings=self.params.max_position_embeddings,
@@ -390,48 +406,51 @@ class Transformer(nn.Module):
                         value.view(self.params.num_heads, self.params.qk_nope_head_dim + self.params.v_head_dim, -1),
                         [self.params.qk_nope_head_dim, self.params.v_head_dim], dim=1)
                     k_module_name = module_name.replace('kv_b_proj', 'k_b_proj')
-                    self.get_submodule(k_module_name)._parameters[param_name][:] = k_b_weight
+                    self.get_submodule(k_module_name)._parameters[param_name][:] = k_b_weight.reshape(-1, self.params.kv_lora_rank)
                     replaced_key = k_module_name + '.' + param_name
-                    print(f'Loaded: {key} -> {replaced_key}[{k_b_weight.shape}]')
+                    print(f'Splited: {key} -> {replaced_key}[{k_b_weight.shape}]')
                     v_module_name = module_name.replace('kv_b_proj', 'v_b_proj')
-                    self.get_submodule(v_module_name)._parameters[param_name][:] = v_b_weight
+                    self.get_submodule(v_module_name)._parameters[param_name][:] = v_b_weight.reshape(-1, self.params.kv_lora_rank)
                     replaced_key = v_module_name + '.' + param_name
-                    print(f'Loaded: {key} -> {replaced_key}[{v_b_weight.shape}]')
+                    print(f'Splited: {key} -> {replaced_key}[{v_b_weight.shape}]')
 
                 if True: # fused ffn
                     if 'mlp.up_proj' in key:
                         loaded_params.add(key)
-                        self.get_submodule(module_name)._parameters[param_name][:self.tp_imm_dim] = value
-                        replaced_key = module_name + '.' + param_name
-                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
-                    if 'mlp.gate_proj' in key:
-                        loaded_params.add(key)
-                        module_name = module_name.replace('gate_proj', 'up_proj')
+                        module_name = module_name.replace('up_proj', 'up_gate_proj')
                         self.get_submodule(module_name)._parameters[param_name][self.tp_imm_dim:] = value
                         replaced_key = module_name + '.' + param_name
-                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                        print(f'Merged: {key} -> {replaced_key}[{value.shape}]')
+                    if 'mlp.gate_proj' in key:
+                        loaded_params.add(key)
+                        module_name = module_name.replace('gate_proj', 'up_gate_proj')
+                        self.get_submodule(module_name)._parameters[param_name][:self.tp_imm_dim] = value
+                        replaced_key = module_name + '.' + param_name
+                        print(f'Merged: {key} -> {replaced_key}[{value.shape}]')
                     if 'mlp.shared_experts.up_proj' in key:
                         loaded_params.add(key)
-                        self.get_submodule(module_name)._parameters[param_name][:self.tp_moe_imm_dim] = value
+                        module_name = module_name.replace('up_proj', 'up_gate_proj')
+                        self.get_submodule(module_name)._parameters[param_name][self.tp_shared_expert_imm_dim:] = value
                         replaced_key = module_name + '.' + param_name
-                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                        print(f'Merged: {key} -> {replaced_key}[{value.shape}]')
                     if 'mlp.shared_experts.gate_proj' in key:
                         loaded_params.add(key)
-                        module_name = module_name.replace('gate_proj', 'up_proj')
-                        self.get_submodule(module_name)._parameters[param_name][self.tp_moe_imm_dim:] = value
+                        module_name = module_name.replace('gate_proj', 'up_gate_proj')
+                        self.get_submodule(module_name)._parameters[param_name][:self.tp_shared_expert_imm_dim] = value
                         replaced_key = module_name + '.' + param_name
-                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                        print(f'Merged: {key} -> {replaced_key}[{value.shape}]')
                     if 'mlp.experts.up_proj' in key:
                         loaded_params.add(key)
-                        self.get_submodule(module_name)._parameters[param_name][:, :self.moe_imm_dim] = value
-                        replaced_key = module_name + '.' + param_name
-                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
-                    if 'mlp.experts.gate_proj' in key:
-                        loaded_params.add(key)
-                        module_name = module_name.replace('gate_proj', 'up_proj')
+                        module_name = module_name.replace('up_proj', 'up_gate_proj')
                         self.get_submodule(module_name)._parameters[param_name][:, self.moe_imm_dim:] = value
                         replaced_key = module_name + '.' + param_name
-                        print(f'Loaded: {key} -> {replaced_key}[{value.shape}]')
+                        print(f'Merged: {key} -> {replaced_key}[{value.shape}]')
+                    if 'mlp.experts.gate_proj' in key:
+                        loaded_params.add(key)
+                        module_name = module_name.replace('gate_proj', 'up_gate_proj')
+                        self.get_submodule(module_name)._parameters[param_name][:, :self.moe_imm_dim] = value
+                        replaced_key = module_name + '.' + param_name
+                        print(f'Merged: {key} -> {replaced_key}[{value.shape}]')
             except AttributeError as e:
                 raise Exception(f'Failed to inject model weight {key}, can not find corresponding layer.')
 
