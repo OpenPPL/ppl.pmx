@@ -21,6 +21,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                  num_heads: int, head_dim: int,
                  is_causal: bool = True,
                  is_alibi: bool = False,
+                 softmax_scale: float = 0,
                  num_kv_heads: int = 0,
                  num_layer: int = 1, layer_idx: int = 0,
                  quant_bit: int = 0, quant_group: int = 8,
@@ -38,6 +39,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
                 is_alibi_i=is_alibi,
+                softmax_scale_f=softmax_scale,
                 num_kv_heads_i=num_kv_heads,
                 num_layer_i=num_layer,
                 layer_idx_i=layer_idx,
@@ -57,6 +59,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
                 is_alibi_i=is_alibi,
+                softmax_scale_f=softmax_scale,
                 num_kv_heads_i=num_kv_heads,
                 num_layer_i=num_layer,
                 layer_idx_i=layer_idx,
@@ -75,6 +78,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                 head_dim_i=head_dim,
                 is_causal_i=is_causal,
                 is_alibi_i=is_alibi,
+                softmax_scale_f=softmax_scale,
                 num_kv_heads_i=num_kv_heads,
                 num_layer_i=num_layer,
                 layer_idx_i=layer_idx,
@@ -96,6 +100,7 @@ class MultiHeadCacheAttention(torch.autograd.Function):
                  num_heads: int, head_dim: int,
                  is_causal: bool = True,
                  is_alibi: bool = False,
+                 softmax_scale: float = 0,
                  num_kv_heads: int = 0,
                  num_layer: int = 1, layer_idx: int = 0,
                  quant_bit: int = 0, quant_group: int = 8,
@@ -125,7 +130,8 @@ class MultiHeadCacheAttention(torch.autograd.Function):
             kvstarts, decoding_batches,
             max_seqlen, max_kvlen, attn_mask,
             num_heads, head_dim,
-            is_causal, False, num_kv_heads)
+            is_causal, False,
+            softmax_scale, num_kv_heads)
 
         return output
 
@@ -140,6 +146,7 @@ def multi_head_cache_attention(
                 num_heads: int, head_dim: int,
                 is_causal: bool = True,
                 is_alibi: bool = False,
+                softmax_scale: float = 0, 
                 num_kv_heads: int = 0,
                 num_layer: int = 1, layer_idx: int = 0,
                 quant_bit: int = 0, quant_group: int = 8,
@@ -153,7 +160,7 @@ def multi_head_cache_attention(
                                         cachestarts, start_pos, decoding_batches,
                                         max_seqlen, max_kvlen, cache, _scale,
                                         attn_mask, num_heads, head_dim,
-                                        is_causal, is_alibi,
+                                        is_causal, is_alibi, softmax_scale,
                                         num_kv_heads, num_layer,
                                         layer_idx, quant_bit, quant_group,
                                         cache_mode, cache_layout,
@@ -195,7 +202,7 @@ if __name__ == "__main__":
             return multi_head_cache_attention(
                     query, current_key, current_value, seqstarts, kvstarts, cachestarts,
                     start_pos, decoding_batches, max_seqlen, max_kvlen, cache, scale, attn_mask,
-                    self.num_heads, self.head_dim, self.is_causal, self.is_alibi, self.num_kv_heads,
+                    self.num_heads, self.head_dim, self.is_causal, self.is_alibi, 0, self.num_kv_heads,
                     self.num_layer, self.layer_idx, self.quant_bit, self.quant_group,
                     self.cache_mode, self.cache_layout, self.page_size)
 

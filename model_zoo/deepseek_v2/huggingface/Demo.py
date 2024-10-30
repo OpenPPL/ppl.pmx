@@ -17,10 +17,10 @@ def main(
     tokenizer_path: str,
     temperature: float = 0.0,
     top_p: float = 0.95,
-    batch: int = 1,
+    batch: int = 4,
     seqlen_scale_up: int = 1,
     unaligned_batch: bool = False,
-    max_gen_len: int = 1,
+    max_gen_len: int = 256,
     expert_parallel_mode: str = "etp", # "etp" for expert-tensor-parellel, "edp" for expert-data-parallel
     cache_layout: int = 0, # change kv cache layout for hardware performance friendly
     cache_mode: int = 0, # change kv cache indexing mode for memory management friendly, only affected when dynamic_batching == True
@@ -87,16 +87,9 @@ def main(
         max_gen_len=max_gen_len, temperature=temperature, top_p=top_p, top_k=0
     )
 
-    print(f"======\n in_text: {test_text}\n======\n")
-    print(f"======\n in_tok: {prompt_tokens[0]}\n======\n")
-
-    output = tokenizer.decode(results[0])
-    print(f"======\n out_text: {output}\n======\n")
-    print(f"======\n out_tok: {results[0]}\n======\n")
-
-    # for result in results:
-    #     print(tokenizer.decode(result))
-    #     print("\n==================================\n")
+    for result in results:
+        print(tokenizer.decode(result))
+        print("\n==================================\n")
 
 
 if __name__ == "__main__":

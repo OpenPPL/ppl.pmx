@@ -154,9 +154,10 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 page_size: int = 128):
         if torch.onnx.is_in_onnx_export():
             return hidden_states
-        
+
+        num_kv_heads = num_kv_heads if num_kv_heads > 0 else num_heads
         num_local_heads = num_heads
-        num_local_kv_heads = num_kv_heads if num_kv_heads > 0 else num_heads
+        num_local_kv_heads = num_kv_heads
         if proc_group is not None and torch.distributed.get_world_size(proc_group) > 1:
             world_size = torch.distributed.get_world_size(proc_group)
             num_local_heads = num_heads // world_size
@@ -219,7 +220,6 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
                 compressed_kv[..., -qk_rope_head_dim:], seqstarts, start_pos,
                 rotary_sin, rotary_cos, is_interleaved_rotary)
 
-        # CC method, TODO: ACC method
         # compressed kv没有V部分占用，kv cache数据排布需要修改
         compressed_kv, _ = key_value_cache(
             compressed_kv, None,
@@ -229,23 +229,51 @@ class TensorParallelFusedMultiLatentCacheAttention(torch.autograd.Function):
             quant_bit, quant_group, 1,
             cache_mode, cache_layout, page_size)
 
-        compressed_kv, k_pe = torch.split( # (b*s, 1, kv_lora + qk_r)
-            compressed_kv, [kv_lora_rank, qk_rope_head_dim], dim=-1
-        )
-        compressed_kv = compressed_kv.view(-1, kv_lora_rank)
-        # 真实现的时候可以修改LDA，欸，Torch你在干嘛？
-        k = F.linear(compressed_kv, k_b_weight).view(-1, num_local_kv_heads, qk_nope_head_dim)
-        k = torch.cat([k, k_pe.expand(k_pe.shape[0], k.shape[1], k_pe.shape[2])], dim=-1) # (b*s, h, qk_n + qk_r)
-        v = F.linear(compressed_kv, v_b_weight).view(-1, num_local_kv_heads, _vo_head_dim) # (b*s, h, vo_d)
+        # CC
+        if decoding_batches.item() == 0: # prefill, 此处为简单过滤，实际要对prefill batch用CC， decode batch用ACC
+            compressed_kv, k_pe = torch.split( # (b*s, 1, kv_lora + qk_r)
+                compressed_kv, [kv_lora_rank, qk_rope_head_dim], dim=-1
+            )
+            compressed_kv = compressed_kv.view(-1, kv_lora_rank)
+            k = torch.empty(k_pe.shape[0], num_local_kv_heads, qk_nope_head_dim + qk_rope_head_dim,
+                            dtype=q.dtype, device=q.device)
+            k[..., qk_nope_head_dim:] = k_pe
+            k[..., :qk_nope_head_dim] = F.linear(compressed_kv, k_b_weight).view(-1, num_local_kv_heads, qk_nope_head_dim)
+            v = F.linear(compressed_kv, v_b_weight).view(-1, num_local_kv_heads, _vo_head_dim) # (b*s, h, vo_d)
 
-        output_parallel = multi_head_attention(
-            q, k, v, seqstarts,
-            kvstarts, decoding_batches,
-            max_seqlen, max_kvlen, attn_mask,
-            num_local_heads, head_dim,
-            is_causal, False, softmax_scale, num_local_kv_heads) # (bs, h, vo_d)
+            output_parallel = multi_head_attention(
+                q, k, v, seqstarts,
+                kvstarts, decoding_batches,
+                max_seqlen, max_kvlen, attn_mask,
+                num_local_heads, head_dim,
+                is_causal, False, softmax_scale, num_local_kv_heads) # (bs, h, vo_d)
+        # ACC
+        else:
+            q_ne, q_pe = torch.split( # (b*s, h, qk_n + qk_r) -> (b*s, h, qk_n), (b*s, h, qk_r)
+                q, [qk_nope_head_dim, qk_rope_head_dim], dim=-1
+            )
+            q = torch.empty(q.shape[0], num_local_heads, kv_lora_rank + qk_rope_head_dim,
+                            dtype=q.dtype, device=q.device)
+            q[..., kv_lora_rank:] = q_pe
+            q[..., :kv_lora_rank] = torch.bmm( # TODO: 转换成einsum 或者 cublas
+                q_ne.transpose(0, 1), # (h, b*s, qk_n)
+                k_b_weight.view(num_local_kv_heads, qk_nope_head_dim, kv_lora_rank) # (h, qk_n, kv_lora)
+            ).transpose(0, 1) # (b*s, h, kv_lora)
+            k = compressed_kv # (b*s, 1, kv_lora + qk_r)
+            v = compressed_kv[..., :kv_lora_rank] # (b*s, 1, kv_lora)
 
-        output_parallel = F.linear(output_parallel.reshape(-1, num_heads * vo_head_dim), o_weight)
+            output_parallel = multi_head_attention(
+                q, k, v, seqstarts,
+                kvstarts, decoding_batches,
+                max_seqlen, max_kvlen, attn_mask,
+                num_local_heads, head_dim,
+                is_causal, False, softmax_scale, 1) # (b*s, h, kv_lora)
+            output_parallel = torch.bmm(  # TODO: 转换成einsum 或者 cublas
+                output_parallel.transpose(0, 1), # (h, b*s, kv_lora)
+                v_b_weight.view(num_local_kv_heads, _vo_head_dim, kv_lora_rank).transpose(1, 2) # (h, kv_lora, vo_d)
+            ).transpose(0, 1) # (b*s, h, vo_d)
+
+        output_parallel = F.linear(output_parallel.reshape(-1, num_local_heads * _vo_head_dim), o_weight)
 
         if proc_group is not None and torch.distributed.get_world_size(proc_group) > 1:
             torch.distributed.all_reduce(output_parallel, group=proc_group)

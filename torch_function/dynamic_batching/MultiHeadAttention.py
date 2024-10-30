@@ -148,7 +148,7 @@ if __name__ == "__main__":
                     max_seqlen: torch.Tensor, max_kvlen: torch.Tensor, attn_mask: torch.Tensor = None):
             return multi_head_attention(query, key, value, seqstarts, kvstarts, decoding_batches,
                                     max_seqlen, max_kvlen, attn_mask,
-                                    self.num_heads, self.head_dim, self.is_causal, True, self.num_heads)
+                                    self.num_heads, self.head_dim, self.is_causal, True, 0, self.num_heads)
 
 
     bs = 2

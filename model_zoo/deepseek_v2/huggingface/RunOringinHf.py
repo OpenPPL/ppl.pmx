@@ -9,7 +9,7 @@ model.generation_config.pad_token_id = model.generation_config.eos_token_id
 
 text = "I believe the meaning of life is"
 inputs = tokenizer(text, return_tensors="pt")
-outputs = model.generate(**inputs.to(model.device), max_new_tokens=1, )
+outputs = model.generate(**inputs.to(model.device), max_new_tokens=100, )
 
 print(f"======\n in_text: {text}\n======\n")
 print(f"======\n in_tok: {inputs['input_ids']}\n======\n")

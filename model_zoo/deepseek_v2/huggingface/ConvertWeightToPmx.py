@@ -63,7 +63,7 @@ def write_pmx_model(model_path, input_base_path, model_type):
 
     pmx_params_dict['num_layers'] = params['num_hidden_layers']
     pmx_params_dict['num_heads'] = params['num_attention_heads']
-    pmx_params_dict['num_kv_heads'] = params['num_key_value_heads']
+    pmx_params_dict['num_kv_heads'] = params.get('num_key_value_heads', params['num_attention_heads'])
     pmx_params_dict['q_lora_rank'] = params['q_lora_rank'] if params['q_lora_rank'] is not None else 0
     pmx_params_dict['kv_lora_rank'] = params['kv_lora_rank']
     pmx_params_dict['qk_nope_head_dim'] = params['qk_nope_head_dim']
@@ -132,9 +132,20 @@ def write_pmx_model(model_path, input_base_path, model_type):
     for layer_i in range(pmx_params_dict['num_first_dense_layers']):
         # attn weight
         if not pmx_params_dict['q_lora_rank']:
-            wq = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"]
+            # for deepseek v2 lite
+            q_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"]
+            state_dict.update({f"layers.{layer_i}.self_attn.q_proj.weight": q_proj})
         else:
-            pass # todo
+            # for deepseek v2
+            q_a_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_a_proj.weight"]
+            q_a_layernorm_w = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_a_layernorm.weight"]
+            q_b_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_b_proj.weight"]
+            state_dict.update({
+                f"layers.{layer_i}.self_attn.q_a_proj.weight": q_a_proj,
+                f"layers.{layer_i}.self_attn.q_a_layernorm.weight": q_a_layernorm_w,
+                f"layers.{layer_i}.self_attn.q_b_proj.weight": q_b_proj,
+            })
+
         kv_a_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.kv_a_proj_with_mqa.weight"]
         kv_a_layernorm_w = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.kv_a_layernorm.weight"]
         kv_b_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.kv_b_proj.weight"]
@@ -147,8 +158,7 @@ def write_pmx_model(model_path, input_base_path, model_type):
         up_proj = hf_model_state_dict[f"model.layers.{layer_i}.mlp.up_proj.weight"]
         down_proj = hf_model_state_dict[f"model.layers.{layer_i}.mlp.down_proj.weight"]
 
-        state_dict.update({
-            f"layers.{layer_i}.self_attn.q_proj.weight": wq, 
+        state_dict.update({ 
             f"layers.{layer_i}.self_attn.kv_a_proj.weight": kv_a_proj,
             f"layers.{layer_i}.self_attn.kv_a_layernorm.weight": kv_a_layernorm_w,
             f"layers.{layer_i}.self_attn.kv_b_proj.weight": kv_b_proj,
@@ -167,14 +177,24 @@ def write_pmx_model(model_path, input_base_path, model_type):
 
         # attn weight
         if not pmx_params_dict['q_lora_rank']:
-            wq = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"]
+            # for deepseek v2 lite
+            q_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"]
+            state_dict.update({f"layers.{layer_i}.self_attn.q_proj.weight": q_proj})
         else:
-            pass # todo
+            # for deepseek v2
+            q_a_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_a_proj.weight"]
+            q_a_layernorm_w = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_a_layernorm.weight"]
+            q_b_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.q_b_proj.weight"]
+            state_dict.update({
+                f"layers.{layer_i}.self_attn.q_a_proj.weight": q_a_proj,
+                f"layers.{layer_i}.self_attn.q_a_layernorm.weight": q_a_layernorm_w,
+                f"layers.{layer_i}.self_attn.q_b_proj.weight": q_b_proj,                
+            })
+
         kv_a_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.kv_a_proj_with_mqa.weight"]
         kv_a_layernorm_w = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.kv_a_layernorm.weight"]
         kv_b_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.kv_b_proj.weight"]
         o_proj = hf_model_state_dict[f"model.layers.{layer_i}.self_attn.o_proj.weight"]
-
 
 
         # mlp shared expert
@@ -194,7 +214,6 @@ def write_pmx_model(model_path, input_base_path, model_type):
         post_attention_layernorm_w = hf_model_state_dict[f"model.layers.{layer_i}.post_attention_layernorm.weight"]
         
         state_dict.update({
-            f"layers.{layer_i}.self_attn.q_proj.weight": wq, 
             f"layers.{layer_i}.self_attn.kv_a_proj.weight": kv_a_proj,
             f"layers.{layer_i}.self_attn.kv_a_layernorm.weight": kv_a_layernorm_w,
             f"layers.{layer_i}.self_attn.kv_b_proj.weight": kv_b_proj,

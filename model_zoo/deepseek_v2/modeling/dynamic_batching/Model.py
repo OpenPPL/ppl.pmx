@@ -30,9 +30,6 @@ class Attention(nn.Module):
         self.args = args
         self.proc_group = proc_group
 
-        tp_world_size = 1 if proc_group is None else proc_group.size()
-        self.tp_num_heads = args.num_heads // tp_world_size
-
         self.q_head_dim = args.qk_nope_head_dim + args.qk_rope_head_dim
         self.layer_id = layer_id
 
@@ -42,30 +39,30 @@ class Attention(nn.Module):
                     bias_term=False, gather_output=False)
             self.q_a_layernorm = RMSNorm(args.q_lora_rank) # 一定DP
             self.q_b_proj = ColumnParallelLinear( # 要么TP要么DP
-                    proc_group, args.q_lora_rank, self.tp_num_heads * self.q_head_dim,
+                    self.proc_group, args.q_lora_rank, args.num_heads * self.q_head_dim,
                     bias_term=False, gather_output=False)
         else:
             self.q_proj = ColumnParallelLinear( # 要么TP要么DP
-                    proc_group, args.hidden_dim, self.tp_num_heads * self.q_head_dim,
+                    self.proc_group, args.hidden_dim, args.num_heads * self.q_head_dim,
                     bias_term=False, gather_output=False)
         self.kv_a_proj = ColumnParallelLinear( # 一定DP
                 None, args.hidden_dim, args.kv_lora_rank + args.qk_rope_head_dim,
                 bias_term=False, gather_output=False)
         self.kv_a_layernorm = RMSNorm(args.kv_lora_rank) # 一定DP
         self.k_b_proj = ColumnParallelLinear( # 要么TP要么DP
-                proc_group, args.kv_lora_rank, self.tp_num_heads * args.qk_nope_head_dim,
+                self.proc_group, args.kv_lora_rank, args.num_kv_heads * args.qk_nope_head_dim,
                 bias_term=False, gather_output=False)
         self.v_b_proj = ColumnParallelLinear( # 要么TP要么DP
-                proc_group, args.kv_lora_rank, self.tp_num_heads * args.v_head_dim,
+                self.proc_group, args.kv_lora_rank, args.num_kv_heads * args.v_head_dim,
                 bias_term=False, gather_output=False)
         self.o_proj = RowParallelLinear( # 要么TP要么DP
-            proc_group, self.tp_num_heads * args.v_head_dim, args.hidden_dim,
+            self.proc_group, args.num_heads * args.v_head_dim, args.hidden_dim,
             bias_term=False, input_is_parallel=True)
 
         self.softmax_scale = self.q_head_dim ** (-0.5)
-        if self.args.rope_scaling_type == "yarn":
-            mscale_all_dim = self.args.rope_scaling_mscale_all_dim
-            scaling_factor = self.args.rope_scaling_factor
+        if args.rope_scaling_type == "yarn":
+            mscale_all_dim = args.rope_scaling_mscale_all_dim
+            scaling_factor = args.rope_scaling_factor
 
             def yarn_get_mscale(scale=1, mscale=1):
                 if scale <= 1:
@@ -310,6 +307,8 @@ class Transformer(nn.Module):
         else:
             tp_world_size = 1
             tp_proc_group = None
+        num_kv_heads = params.num_heads if params.num_kv_heads == 0 else params.num_kv_heads
+        self.tp_num_kv_heads = num_kv_heads // tp_world_size
         self.tp_imm_dim = params.intermediate_dim // tp_world_size
         self.tp_shared_expert_imm_dim = (params.moe_intermediate_dim * params.num_shared_experts) // tp_world_size
         self.moe_imm_dim = params.moe_intermediate_dim
@@ -403,7 +402,7 @@ class Transformer(nn.Module):
                 if 'kv_b_proj' in key:
                     loaded_params.add(key)
                     k_b_weight, v_b_weight = torch.split(
-                        value.view(self.params.num_heads, self.params.qk_nope_head_dim + self.params.v_head_dim, -1),
+                        value.view(self.tp_num_kv_heads, self.params.qk_nope_head_dim + self.params.v_head_dim, -1),
                         [self.params.qk_nope_head_dim, self.params.v_head_dim], dim=1)
                     k_module_name = module_name.replace('kv_b_proj', 'k_b_proj')
                     self.get_submodule(k_module_name)._parameters[param_name][:] = k_b_weight.reshape(-1, self.params.kv_lora_rank)
