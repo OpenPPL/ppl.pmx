@@ -1,7 +1,8 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 
-model_name = "/mnt/llm/DeepSeekV2/DeepSeek-V2-Lite"
+# model_name = "/mnt/llm/DeepSeekV2/DeepSeek-V2-Lite"
+model_name = "<your_path_to_deepseek_v2>"
 tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.float16).cuda()
 model.generation_config = GenerationConfig.from_pretrained(model_name)

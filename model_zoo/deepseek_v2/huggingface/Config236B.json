@@ -33,5 +33,5 @@
     "moe_normalize_prob": false,
     "moe_intermediate_dim": 1536,
     "moe_topk_group": 3,
-    "moe_topk_method": "greedy"
+    "moe_topk_method": "group_limited_greedy"
 }

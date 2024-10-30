@@ -40,7 +40,7 @@ class MoeSelect(torch.autograd.Function):
         # invert_permutation: [*, num_experts_per_token]
         # expert_offset: [num_experts + 1]
 
-        assert 'greedy' in gating_method and len('greedy') == len(gating_method)
+        # assert 'greedy' in gating_method and len('greedy') == len(gating_method)
 
         if torch.onnx.is_in_onnx_export():
             X_expand_permute = torch.zeros(*X.shape[:-1], num_experts_per_token, X.shape[-1], dtype=X.dtype).to(X.device)
@@ -52,9 +52,27 @@ class MoeSelect(torch.autograd.Function):
             origin_shape = X.shape
             X_expand_permute = X.view(-1, X.shape[-1])
 
-            _scores = scores.softmax(dim=-1, dtype=torch.float32)
+            _scores = scores.softmax(dim=-1, dtype=torch.float32).view(-1, num_experts)
             if 'greedy' in gating_method and len('greedy') == len(gating_method):
                 expert_weights, expert_indices = torch.topk(_scores, num_experts_per_token, dim=-1)
+            elif 'grouped_limited_greedy' in gating_method and len('grouped_limited_greedy') == len(gating_method):
+                group_scores = (
+                    _scores.view(_scores.shape[0], num_expert_groups, -1).max(dim=-1).values
+                )  # [n, n_group]
+                group_idx = torch.topk(
+                    group_scores, k=num_groups_per_token, dim=-1, sorted=False
+                )[1]  # [n, top_k_group]
+                group_mask = torch.zeros_like(group_scores)  # [n, n_group]
+                group_mask.scatter_(1, group_idx, 1)  # [n, n_group]
+                score_mask = (
+                    group_mask.unsqueeze(-1)
+                    .expand(_scores.shape[0], num_expert_groups, num_experts_per_token // num_expert_groups
+                    )
+                    .reshape(_scores.shape[0], -1)
+                )  # [n, e]
+                tmp_scores = scores.masked_fill(~score_mask.bool(), 0.0)  # [n, e]
+                expert_weights, expert_indices = torch.topk(tmp_scores, num_experts_per_token, dim=-1)
+
             if num_experts_per_token > 1 and gating_normalize_prob:
                 denominator = expert_weights.sum(dim=-1, keepdim=True) + 1e-20
                 expert_weights = expert_weights / denominator
