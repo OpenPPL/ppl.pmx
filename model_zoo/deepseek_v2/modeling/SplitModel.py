@@ -149,7 +149,64 @@ def split_pmx_model_etp(model_path, input_base_path, num_shards):
 
 
 def split_pmx_model_edp(model_path, input_base_path, num_shards):
-    assert False, "TODO"
+    os.makedirs(model_path, exist_ok=True)
+    params = read_json((os.path.join(input_base_path, "opmx_params.json")))
+
+    # weight sharding
+    # hidden_dim = params['hidden_dim']
+    # v_head_dim = params['v_head_dim']
+    # q_lora_rank = params['q_lora_rank']
+    # kv_lora_rank = params['kv_lora_rank']
+    # intermediate_dim = params['intermediate_dim']
+    # shared_expert_intermediate_size = params['moe_intermediate_dim'] * params['num_shared_experts']
+    # moe_intermediate_size = params['moe_intermediate_dim']
+    n_expert = params['num_experts']
+
+    # num_kv_heads = params['num_kv_heads'] if 'num_kv_heads' in params else params['num_heads']
+
+    #dims_per_head = hidden_dim // params['num_heads']
+    # q_dims_per_head = params['qk_nope_head_dim'] + params['qk_rope_head_dim']
+    # kv_dims_per_head = params['qk_nope_head_dim'] + params['v_head_dim']
+
+
+    #key_value_dim = dims_per_head * num_kv_heads
+
+    write_json(params, os.path.join(model_path, "opmx_params.json"))
+
+    state_dict = {}
+    for ckpt_path in sorted(Path(input_base_path).glob("*.pth")):
+        state_dict.update(torch.load(ckpt_path, map_location='cpu'))
+
+    for layer_i in range(params['num_first_dense_layers'], params['num_layers']):
+        # expert ep
+        gate_proj = state_dict[f"layers.{layer_i}.mlp.experts.gate_proj.weight"].split([n_expert//num_shards]*num_shards, dim=0)
+        down_proj = state_dict[f"layers.{layer_i}.mlp.experts.down_proj.weight"].split([n_expert//num_shards]*num_shards, dim=0)
+        up_proj = state_dict[f"layers.{layer_i}.mlp.experts.up_proj.weight"].split([n_expert//num_shards]*num_shards, dim=0)
+
+        state_dict.update({
+            f"layers.{layer_i}.mlp.experts.gate_proj.weight": gate_proj,
+            f"layers.{layer_i}.mlp.experts.down_proj.weight": down_proj,
+            f"layers.{layer_i}.mlp.experts.up_proj.weight": up_proj,
+        })
+
+    # only split ColParallelLinear bias
+    # for key in state_dict.keys():
+    #     if 'wo.bias' in key or 'w2.bias' in key: continue
+    #     if 'bias' in key:
+    #         bias_dim = state_dict[key].shape[0]
+    #         split_bias = state_dict[key].split([bias_dim // num_shards]*num_shards)
+    #         state_dict.update({key: split_bias})
+
+    # dump weight
+    tmp_weight_list = [{} for _ in range(num_shards)]
+    for key, value in state_dict.items():
+        for idx, w_dict in enumerate(tmp_weight_list):
+            if torch.is_tensor(value):
+                tmp_weight_list[idx].update({key:value.clone()})
+            else:
+                tmp_weight_list[idx].update({key:value[idx].clone()})
+    for idx, weight_dict in enumerate(tmp_weight_list):
+        torch.save(weight_dict, os.path.join(model_path, f"model.{idx:02d}.pth"))
 
 
 def main():
