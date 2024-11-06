@@ -52,7 +52,7 @@ def split_pmx_model(model_path, input_base_path, num_shards):
         wv = state_dict[f"layers.{layer_i}.attention.wv.weight"].reshape(num_kv_heads_per_shard*num_shards, dims_per_head, hidden_dim).split([num_kv_heads_per_shard]*num_shards, dim=0)
         wv = [w.reshape(-1, hidden_dim) for w in wv]
 
-        wo = state_dict[f"layers.{layer_i}.attention.wo.weight"].split([hidden_dim // num_shards]*num_shards, dim=1)
+        wo = state_dict[f"layers.{layer_i}.attention.wo.weight"].split([query_dim // num_shards]*num_shards, dim=1)
         ff_w1 = state_dict[f"layers.{layer_i}.feed_forward.w1.weight"].split([intermediate_dim // num_shards]*num_shards, dim=-2)
         ff_w2 = state_dict[f"layers.{layer_i}.feed_forward.w2.weight"].split([intermediate_dim // num_shards]*num_shards, dim=-1)
         ff_w3 = state_dict[f"layers.{layer_i}.feed_forward.w3.weight"].split([intermediate_dim // num_shards]*num_shards, dim=-2)
