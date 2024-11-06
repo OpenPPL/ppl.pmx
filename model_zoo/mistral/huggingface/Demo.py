@@ -8,8 +8,8 @@ from typing import List
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../..")
 
-import mistral.modeling.Loader as Loader
-from Tokenizer import Tokenizer
+import llama.modeling.Loader as Loader
+from llama.huggingface.Tokenizer import Tokenizer
 from ModelParams import ModelParams
 
 def main(

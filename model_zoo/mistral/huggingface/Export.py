@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../..")
 
-import mistral.modeling.Loader as Loader
+import llama.modeling.Loader as Loader
 from ModelParams import ModelParams
 
 def main(

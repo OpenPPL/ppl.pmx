@@ -16,7 +16,7 @@ you can find opmx model file in`<pmx_model_dir>` after the conversion.
 
 ## Spliting model
 
-[SplitModel.py](https://github.com/openppl-public/ppl.opmx/blob/master/model_zoo/llama/modeling/SplitModel.py) is a Python script that splits a OPMX model's weights into multiple shards. The script reads a OPMX model's weights and divides them into specified shards, creating separate models for each shard.
+[SplitModel.py](https://github.com/openppl-public/ppl.opmx/blob/master/model_zoo/mistral/modeling/SplitModel.py) is a Python script that splits a OPMX model's weights into multiple shards. The script reads a OPMX model's weights and divides them into specified shards, creating separate models for each shard.
 
 ```bash
 python SplitModel.py --input_dir <input_directory_path> --num_shards <number_of_shards> --output_dir <output_directory_path>
@@ -28,7 +28,7 @@ python SplitModel.py --input_dir <input_directory_path> --num_shards <number_of_
 
 ## Merging model
 
-[MergeModel.py](https://github.com/openppl-public/ppl.opmx/blob/master/model_zoo/llama/modeling/MergeModel.py) is a Python script that merges weights of a sharded model into a single model. The script reads the weights from multiple shards of a model and creates a consolidated model with combined weights.
+[MergeModel.py](https://github.com/openppl-public/ppl.opmx/blob/master/model_zoo/mistral/modeling/MergeModel.py) is a Python script that merges weights of a sharded model into a single model. The script reads the weights from multiple shards of a model and creates a consolidated model with combined weights.
 
 ```bash
 python MergeModel.py --input_dir <input_directory_path> --num_shards <number_of_shards> --output_dir <output_directory_path>
@@ -43,7 +43,7 @@ python MergeModel.py --input_dir <input_directory_path> --num_shards <number_of_
 The `Demo.py` script provides functionality to test the model for correctness before exporting.
 
 ```bash
-OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu Demo.py --ckpt_dir <llama_dir> --tokenizer_path <llama_tokenizer_dir>/tokenizer.model --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 --quantized_cache 1 --dynamic_batching 1
+OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu Demo.py --ckpt_dir <mistral_dir> --tokenizer_path <mistral_tokenizer_dir>/tokenizer.model --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 --quantized_cache 1 --dynamic_batching 1
 ```
 
 - `OMP_NUM_THREADS`: This parameter determines the number of OpenMP threads. It is set to 1 to prevent excessive CPU core usage. Each PyTorch process opens an OpenMP thread pool, and setting it to 1 avoids occupying too many CPU cores.
@@ -54,7 +54,7 @@ OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu Demo.py --ckpt_dir <llama_d
 To export a model, you will use the `Export.py` script provided. Here's an example command for exporting a 13B model with 1 GPU:
 
 ```bash
-OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu Export.py --ckpt_dir <llama_dir> --tokenizer_path <llama_tokenizer_dir>/tokenizer.model --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 --quantized_cache 1 --dynamic_batching 1 --export_path <export_dir>
+OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu Export.py --ckpt_dir <mistral_dir> --tokenizer_path <mistral_tokenizer_dir>/tokenizer.model --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 --quantized_cache 1 --dynamic_batching 1 --export_path <export_dir>
 ```
 
 Make sure to replace `$num_gpu` with the actual number of GPUs you want to use.
@@ -64,7 +64,7 @@ Make sure to replace `$num_gpu` with the actual number of GPUs you want to use.
 This script demonstrates how to generate test data for steps 0, 1, and 255 using the specified command.
 
 ```bash
-OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu Demo.py --ckpt_dir <llama_dir> --tokenizer_path <llama_tokenizer_dir>/tokenizer.model --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 --quantized_cache 1 --dynamic_batching 1 --seqlen_scale_up 1 --max_gen_len 256 --dump_steps 0,1,255 --dump_tensor_path <dump_dir>  --batch 1
+OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu Demo.py --ckpt_dir <mistral_dir> --tokenizer_path <mistral_tokenizer_dir>/tokenizer.model --fused_qkv 1 --fused_kvcache 1 --auto_causal 1 --quantized_cache 1 --dynamic_batching 1 --seqlen_scale_up 1 --max_gen_len 256 --dump_steps 0,1,255 --dump_tensor_path <dump_dir>  --batch 1
 ```
 
 - `seqlen_scale_up`: Scale factor for input byte size (sequence length scaled up by 8).
@@ -73,4 +73,4 @@ OMP_NUM_THREADS=1 torchrun --nproc_per_node $num_gpu Demo.py --ckpt_dir <llama_d
 - `dump_tensor_path`: Path to store the dumped test data.
 - `batch`: Specifies the batch size for data processing.
 
-Make sure to replace `<llama_dir>` , `<llama_tokenizer_dir>` and `<dump_tensor_path>`with the actual directory paths in your environment.
+Make sure to replace `<mistral_dir>` , `<mistral_tokenizer_dir>` and `<dump_tensor_path>`with the actual directory paths in your environment.
