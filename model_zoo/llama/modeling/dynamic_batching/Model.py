@@ -36,11 +36,12 @@ class Attention(nn.Module):
 
         world_size = 1 if proc_group is None else proc_group.size()
 
+        self.num_heads = args.num_heads
         self.num_kv_heads = args.num_heads if args.num_kv_heads is None else args.num_kv_heads
         self.num_local_heads = args.num_heads // world_size
         self.num_local_kv_heads = self.num_kv_heads // world_size
         self.num_local_kv_repeats = self.num_local_heads // self.num_local_kv_heads
-        self.head_dim = args.hidden_dim // args.num_heads
+        self.head_dim = args.head_dim if args.head_dim is not None else args.hidden_dim // args.num_heads
         self.num_layers = args.num_layers
         self.layer_id = layer_id
         self.cache_quant_bit = args.cache_quant_bit
@@ -66,11 +67,11 @@ class Attention(nn.Module):
 
         if self.fused_qkv:
             self.wqkv = ColumnParallelLinear(
-                proc_group, args.hidden_dim, args.hidden_dim + 2 * self.num_kv_heads * self.head_dim,
+                proc_group, args.hidden_dim, self.num_heads * self.head_dim + 2 * self.num_kv_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, gather_output=False)
         else:
             self.wq = ColumnParallelLinear(
-                proc_group, args.hidden_dim, args.hidden_dim,
+                proc_group, args.hidden_dim, self.num_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, gather_output=False)
             self.wk = ColumnParallelLinear(
                 proc_group, args.hidden_dim, self.num_kv_heads * self.head_dim,
@@ -79,7 +80,7 @@ class Attention(nn.Module):
                 proc_group, args.hidden_dim, self.num_kv_heads * self.head_dim,
                 bias_term=attn_wqkv_bias_term, gather_output=False)
         self.wo = RowParallelLinear(
-            proc_group, args.hidden_dim, args.hidden_dim,
+            proc_group, self.num_heads * self.head_dim, args.hidden_dim,
             bias_term=attn_wo_bias_term, input_is_parallel=True)
 
 
@@ -307,7 +308,8 @@ class Transformer(nn.Module):
         num_kv_heads = params.num_heads if params.num_kv_heads is None else params.num_kv_heads
         num_local_heads = params.num_heads // world_size
         num_local_kv_heads = num_kv_heads // world_size
-        head_dim = params.hidden_dim // params.num_heads
+        head_dim = params.head_dim if params.head_dim is not None else params.hidden_dim // params.num_heads
+
         self.local_q_dim = num_local_heads * head_dim
         self.local_kv_dim = num_local_kv_heads * head_dim
         self.local_imm_dim = params.intermediate_dim // world_size 
