@@ -120,7 +120,6 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
         if torch.onnx.is_in_onnx_export():
             hidden_states
 
-        assert 'tensor_parallel' in companion_parallel_mode and len('tensor_parallel') == len(companion_parallel_mode)
         assert 'silu' in activation_method and len('silu') == len(activation_method)
 
         act_fns = {
@@ -143,34 +142,36 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
 
         logits = F.linear(hidden_states.view(-1, hidden_dim), route_weight).view(*hidden_states.shape[:-1], num_experts)
 
-        if 'tensor_parallel' in companion_parallel_mode and len('tensor_parallel') == len(companion_parallel_mode):
-            # TP+EP方案，shared expert走TP，moe expert走EP
-            if has_shared_expert: # do tp for shared expert
+        # shared expert 对etp走tp, edp走dp
+        if has_shared_expert:
+            if 'tensor_parallel' in companion_parallel_mode and len('tensor_parallel') == len(companion_parallel_mode):
                 assert shared_intermediate_dim % world_size == 0, "{} is not divisible by {}".format(shared_intermediate_dim, world_size)
-                output_parallel = F.linear(
-                    hidden_states.view(-1, hidden_dim),
-                    shared_up_proj_weight,
-                    shared_up_proj_bias if up_proj_bias_term else None)
-                output_parallel = act_fn(output_parallel)
-                output_parallel = F.linear(
-                    output_parallel,
-                    shared_down_proj_weight,
-                    shared_down_proj_bias if down_proj_bias_term and local_rank == 0 else None)
-                output_parallel.view_as(hidden_states)
-            else:
-                output_parallel = torch.zeros_like(hidden_states) # (b, s, hid)
+            output_parallel = F.linear(
+                hidden_states.view(-1, hidden_dim),
+                shared_up_proj_weight,
+                shared_up_proj_bias if up_proj_bias_term else None)
+            output_parallel = act_fn(output_parallel)
+            output_parallel = F.linear(
+                output_parallel,
+                shared_down_proj_weight,
+                shared_down_proj_bias if down_proj_bias_term and local_rank == 0 else None)
+            output_parallel.view_as(hidden_states)
+        else:
+            output_parallel = torch.zeros_like(hidden_states) # (b, s, hid)
 
-            # 为了开BUFFER方便，中间tensor基本都是为所有token分配
-            # 重排所有的
-            # do ep for normal experts
-            # (b, s, es, hid), (b, s, es), (b, s, es), (e + 1)
-            states_expand_permute, expert_weights, invert_permutation, expert_offset = moe_select(
-                hidden_states, logits, num_experts, num_experts_per_token,
-                num_expert_groups, num_groups_per_token,
-                gating_scaling_factor, gating_normalize_prob,
-                gating_method
-            )
+        # 为了开BUFFER方便，中间tensor基本都是为所有token分配
+        # 重排所有的
+        # do ep for normal experts
+        # (b, s, es, hid), (b, s, es), (b, s, es), (e + 1)
+        states_expand_permute, expert_weights, invert_permutation, expert_offset = moe_select(
+            hidden_states, logits, num_experts, num_experts_per_token,
+            num_expert_groups, num_groups_per_token,
+            gating_scaling_factor, gating_normalize_prob,
+            gating_method
+        )
 
+        # TP+EP方案，MOE走EP
+        if 'tensor_parallel' in companion_parallel_mode and len('tensor_parallel') == len(companion_parallel_mode):
             # 分配所有token的空间，但只计算本地expert的部分
             flat_stats = states_expand_permute.view(-1, hidden_dim) # (b * s * es, hid)
             # 非本地expert的token直接置零，实现时可以将置零融合到MOE REDUCE里面
@@ -199,7 +200,70 @@ class MoeExpertParallelFeedForward(torch.autograd.Function):
 
             if world_size > 1:
                 torch.distributed.all_reduce(output_parallel, group=proc_group)
+        # DP+EP方案，MOE走EP
+        elif 'data_parallel' in companion_parallel_mode and len('data_parallel') == len(companion_parallel_mode):
+            device = hidden_states.device
+            flat_stats = states_expand_permute.view(-1, hidden_dim)
+            global_exp_local_token = torch.tensor([expert_offset[i+1] - expert_offset[i] for i in range(num_experts)], dtype=torch.int64, device=device)    # [num_experts]
+            
+            local_exp_global_token = torch.zeros(num_experts, dtype=torch.int64, device=device)  # [rano0_local_exp, rank1_local_exp, ...]
+            dist.all_to_all_single(local_exp_global_token, global_exp_local_token, group=proc_group)
+            
+            input_splits = global_exp_local_token.reshape(world_size, num_local_experts).sum(dim=1) # [world_size]
+            output_splists = local_exp_global_token.reshape(world_size, num_local_experts).sum(dim=1)  # [world_size]
 
+            local_exp_global_input = torch.zeros((output_splists.sum().item(), hidden_dim), dtype=hidden_states.dtype, device=device)
+            dist.all_to_all_single(local_exp_global_input, flat_stats, output_split_sizes=output_splists.tolist(), input_split_sizes=input_splits.tolist(), group=proc_group)
+
+            input_chunk_idxs = torch.arange(num_experts)
+            sorted_local_exp_index = input_chunk_idxs.reshape(world_size, num_local_experts).T.ravel()
+            restore_local_exp_index = input_chunk_idxs.reshape(num_local_experts, world_size).T.ravel()
+
+            # sort chunk by idx
+            expert_sorted_token = local_exp_global_token.reshape(world_size, -1).sum(dim=0) # [num_local_experts]
+            sorted_local_exp_global_token = local_exp_global_token.reshape(world_size, -1).transpose(0, 1).contiguous().view(-1)
+
+            def permute_chunks_by_idxs(input: torch.Tensor, split_size: torch.Tensor, sorted_idxs: torch.Tensor):
+                """
+                    sort chunks by idx, 
+                """
+                splited_input = input.split(split_size.tolist())
+                output = torch.cat([splited_input[i] for i in sorted_idxs.tolist()], dim=0)
+                return output
+
+            expert_sorted_input = permute_chunks_by_idxs(local_exp_global_input, local_exp_global_token, sorted_local_exp_index)
+            expert_sorted_token_offset = [0]
+            # new offset
+            for i in range(num_local_experts):
+                expert_sorted_token_offset.append(expert_sorted_token_offset[i] + expert_sorted_token[i])
+            
+            down_proj_output = torch.zeros_like(local_exp_global_input)
+            for i in range(num_local_experts):
+                token_beg_idx = expert_sorted_token_offset[i]
+                token_end_idx = expert_sorted_token_offset[i+1]
+                local_expert_idx = i
+
+                up_proj_output = F.linear(
+                            expert_sorted_input[token_beg_idx:token_end_idx],
+                            expert_up_proj_weight[local_expert_idx],
+                            expert_up_proj_bias[local_expert_idx] if up_proj_bias_term else None
+                )
+                up_proj_output = act_fn(up_proj_output)
+                down_proj_output[token_beg_idx : token_end_idx] = F.linear(
+                    up_proj_output, 
+                    expert_down_proj_weight[local_expert_idx],
+                    expert_down_proj_bias[local_expert_idx] if down_proj_bias_term else None
+                )
+
+            # restore chunks
+            restore_down_proj_output = permute_chunks_by_idxs(down_proj_output, sorted_local_exp_global_token, restore_local_exp_index)    
+            input_splits2 = output_splists
+            output_splits2 = input_splits
+
+            global_exp_local_output = torch.zeros_like(flat_stats, dtype=hidden_states.dtype, device=device)
+            dist.all_to_all_single(global_exp_local_output, restore_down_proj_output, output_split_sizes=output_splits2.tolist(), input_split_sizes=input_splits2.tolist(), group=proc_group)
+
+            output_parallel += moe_reduce(global_exp_local_output, expert_weights, invert_permutation, num_experts_per_token)
         return output_parallel
 
 
