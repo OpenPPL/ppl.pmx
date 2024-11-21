@@ -52,7 +52,7 @@ class MoeSelect(torch.autograd.Function):
             origin_shape = X.shape
             X_expand_permute = X.view(-1, X.shape[-1])
 
-            _scores = scores.softmax(dim=-1, dtype=torch.float32).view(-1, num_experts)
+            _scores = scores.softmax(dim=-1, dtype=torch.float32).view(-1, num_experts).type_as(scores)
             if 'greedy' in gating_method and len('greedy') == len(gating_method):
                 expert_weights, expert_indices = torch.topk(_scores, num_experts_per_token, dim=-1)
             elif 'grouped_limited_greedy' in gating_method and len('grouped_limited_greedy') == len(gating_method):
